@@ -1,0 +1,6 @@
+[package]
+name = "axp2101-dd"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
