@@ -229,16 +229,16 @@ where
                     LdoId::Aldo2 => r.set_aldo_2_enable(enable),
                     LdoId::Aldo3 => r.set_aldo_3_enable(enable),
                     LdoId::Aldo4 => r.set_aldo_4_enable(enable),
-                    LdoId::Bldo1 => r.set_bldo1_enable(enable),
-                    LdoId::Bldo2 => r.set_bldo2_enable(enable),
+                    LdoId::Bldo1 => r.set_bldo_1_enable(enable),
+                    LdoId::Bldo2 => r.set_bldo_2_enable(enable),
                     _ => unreachable!(),
                 }).await
             }
             LdoId::Dldo1 | LdoId::Dldo2 | LdoId::Cpusldo => {
                 let mut op = self.ll.ldo_control_2();
                 modify_internal(&mut op, |r| match ldo {
-                    LdoId::Dldo1 => r.set_dldo1_enable(enable),
-                    LdoId::Dldo2 => r.set_dldo2_enable(enable),
+                    LdoId::Dldo1 => r.set_dldo_1_enable(enable),
+                    LdoId::Dldo2 => r.set_dldo_2_enable(enable),
                     LdoId::Cpusldo => r.set_cpusldo_enable(enable),
                     _ => unreachable!(),
                 }).await

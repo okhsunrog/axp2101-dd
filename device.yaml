@@ -344,81 +344,9 @@ DcdcModeControl: # REG84H
       end: 2
       description: "DCDC1 working mode"
 
-# Extended DCDC Control (0x80-0x87)
-DcdcConfig0: # REG80H
+Dcdc2Config: # REG85H
   type: register
-  address: 0x80
-  size_bits: 8
-  access: RW
-  reset_value: 0x0F
-  description: "DCDC configuration register 0"
-  fields:
-    dcdc_fccm:
-      base: bool
-      start: 6
-      description: "Force DCDC to work in CCM mode"
-    dvm_speed:
-      base: bool
-      start: 5
-      description: "DVM voltage ramp control (0:15.625us/step, 1:31.250us/step)"
-    dcdc4_en:
-      base: bool
-      start: 3
-      description: "DCDC4 enable"
-    dcdc3_en:
-      base: bool
-      start: 2
-      description: "DCDC3 enable"
-    dcdc2_en:
-      base: bool
-      start: 1
-      description: "DCDC2 enable"
-    dcdc1_en:
-      base: bool
-      start: 0
-      description: "DCDC1 enable"
-
-DcdcConfig1: # REG81H
-  type: register
-  address: 0x81
-  size_bits: 8
-  access: RW
-  reset_value: 0x00
-  description: "DCDC configuration register 1"
-  fields:
-    dcdc_fspd_en:
-      base: bool
-      start: 7
-      description: "DCDC frequency spread enable"
-    dcdc_fspd_ctrl:
-      base: bool
-      start: 6
-      description: "DCDC frequency spread range (0:50kHz, 1:100kHz)"
-    dcdc4_mode:
-      base: bool
-      start: 5
-      description: "DCDC4 PWM/PFM control (0:auto, 1:always PWM)"
-    dcdc3_mode:
-      base: bool
-      start: 4
-      description: "DCDC3 PWM/PFM control (0:auto, 1:always PWM)"
-    dcdc2_mode:
-      base: bool
-      start: 3
-      description: "DCDC2 PWM/PFM control (0:auto, 1:always PWM)"
-    dcdc1_mode:
-      base: bool
-      start: 2
-      description: "DCDC1 PWM/PFM control (0:auto, 1:always PWM)"
-    dcdc_uvp_dbc:
-      base: uint
-      start: 0
-      end: 2
-      description: "DCDC UVP debounce time (00:60us, 01:120us, 10:180us, 11:240us)"
-
-Dcdc2Config: # REG83H
-  type: register
-  address: 0x83
+  address: 0x85
   size_bits: 8
   access: RW
   reset_value: 0x4B
@@ -433,24 +361,6 @@ Dcdc2Config: # REG83H
       start: 0
       end: 7
       description: "DCDC2 output voltage (0.5-1.2V: 10mV/step, 1.22-1.54V: 20mV/step)"
-
-Dcdc3Config: # REG84H (Note: Different from REG84H above)
-  type: register
-  address: 0x84
-  size_bits: 8
-  access: RW
-  reset_value: 0x4B
-  description: "DCDC3 configuration register"
-  fields:
-    dcdc3_dvm_en:
-      base: bool
-      start: 7
-      description: "DCDC3 DVM enable"
-    dcdc3_out:
-      base: uint
-      start: 0
-      end: 7
-      description: "DCDC3 output voltage (0.5-1.2V: 10mV/step, 1.22-1.54V: 20mV/step, 1.6-3.4V: 100mV/step)"
 
 DcdcOvercurrentConfig: # REG87H
   type: register
@@ -602,61 +512,6 @@ CpusldoVoltageControl: # REG98H
       start: 0
       end: 4
       description: "CPUSLDO output voltage setting (0.5V-1.4V, 50mV/step)"
-
-# LDO Enable Control (0x90-0x91)
-LdoEnableConfig0: # REG90H
-  type: register
-  address: 0x90
-  size_bits: 8
-  access: RW
-  reset_value: 0x0F
-  description: "LDO enable configuration 0"
-  fields:
-    dldo1_en:
-      base: bool
-      start: 7
-      description: "DLDO1 enable"
-    cpusldo_en:
-      base: bool
-      start: 6
-      description: "CPUSLDO enable"
-    bldo2_en:
-      base: bool
-      start: 5
-      description: "BLDO2 enable"
-    bldo1_en:
-      base: bool
-      start: 4
-      description: "BLDO1 enable"
-    aldo4_en:
-      base: bool
-      start: 3
-      description: "ALDO4 enable"
-    aldo3_en:
-      base: bool
-      start: 2
-      description: "ALDO3 enable"
-    aldo2_en:
-      base: bool
-      start: 1
-      description: "ALDO2 enable"
-    aldo1_en:
-      base: bool
-      start: 0
-      description: "ALDO1 enable"
-
-LdoEnableConfig1: # REG91H
-  type: register
-  address: 0x91
-  size_bits: 8
-  access: RW
-  reset_value: 0x01
-  description: "LDO enable configuration 1"
-  fields:
-    dldo2_en:
-      base: bool
-      start: 0
-      description: "DLDO2 enable"
 
 # Battery Charging Control (0x60-0x6A)
 ChargeControl1: # REG61H
