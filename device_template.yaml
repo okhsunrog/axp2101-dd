@@ -1,0 +1,554 @@
+# =============================================================================
+# Device Driver Template - Comprehensive Example
+# =============================================================================
+# This template demonstrates all major features of the device-driver toolkit
+# for creating hardware device drivers in Rust. Use this as a reference for
+# creating your own device driver definitions.
+#
+# Based on the device-driver toolkit documentation and real-world examples.
+# See: https://github.com/diondokter/device-driver for more information.
+# =============================================================================
+
+config:
+  # REQUIRED: Address type for register addressing
+  # Options: u8, u16, u32, u64, i8, i16, i32, i64
+  register_address_type: u8
+
+  # OPTIONAL: Set default byte order for multi-byte registers
+  # Options: LE (Little Endian), BE (Big Endian)
+  # When a register is >8 bits, either this must be set globally 
+  # or each register must specify its byte_order
+  default_byte_order: BE
+
+  # OPTIONAL: Set default bit order for all registers
+  # Options: LSB0 (Least Significant Bit 0 - default), MSB0 (Most Significant Bit 0)
+  default_bit_order: LSB0
+
+  # OPTIONAL: Set default access for registers
+  # Options: RW/ReadWrite (default), RO/ReadOnly, WO/WriteOnly
+  default_register_access: RW
+
+  # OPTIONAL: Set default access for fields
+  # Options: RW/ReadWrite (default), RO/ReadOnly, WO/WriteOnly
+  default_field_access: RW
+
+  # OPTIONAL: Enable defmt support behind a feature gate
+  # This adds defmt::Format implementations to generated types
+  defmt_feature: "defmt"
+
+  # OPTIONAL: Configure name word boundary detection for case conversion
+  # The toolkit converts names from datasheets to proper Rust naming
+  # Default handles most common cases: underscores, hyphens, camelCase, etc.
+  name_word_boundaries: [ "Underscore", "Hyphen", "LowerUpper", "UpperDigit", "DigitUpper" ]
+
+# =============================================================================
+# EXAMPLE 1: Basic 8-bit Register with Various Field Types
+# =============================================================================
+# This demonstrates:
+# - Basic register definition with type, address, size_bits
+# - Read-only access override
+# - Boolean fields at single bit positions
+# - Multi-bit unsigned integer fields with range specification
+# - Inline enum generation and conversion
+# - Field documentation
+PowerStatus:
+  # REG00H
+  type: register
+  address: 0x0
+  size_bits: 8
+  # Override the default register access (RW) to read-only
+  access: RO
+  description: |
+    Example read-only status register showing various field types and patterns.
+    Demonstrates boolean fields, multi-bit integers, and inline enum generation.
+  fields:
+    # Boolean field at a single bit position
+    power_good:
+      base: bool
+      start: 7 # Single bit position for boolean fields
+      description: "Power supply status (true: good, false: fault)."
+
+    # Another boolean field
+    battery_present:
+      base: bool
+      start: 6
+      description: "Battery connection status (true: connected, false: disconnected)."
+
+    # Multi-bit unsigned integer with range (start to end, exclusive end)
+    voltage_level:
+      base: uint
+      start: 4
+      end: 6 # Covers bits 4-5 (2 bits total)
+      description: "Supply voltage level indicator (0-3 scale)."
+
+    # Example of inline enum generation - this creates a new enum type
+    power_source:
+      base: uint
+      start: 2
+      end: 4 # Covers bits 2-3 (2 bits total)
+      description: "Current power source selection."
+      conversion:
+        name: PowerSource # Name of the generated enum
+        Battery: { value: 0, description: "Running on battery power" }
+        USB: { value: 1, description: "Running on USB power" }
+        AC: { value: 2, description: "Running on AC adapter" }
+        Unknown: { value: 3, description: "Unknown power source" }
+    # Reserved bits (not defining fields for bits 1-0 leaves them as reserved)
+    # In real drivers, you might want to document this explicitly
+
+    # =============================================================================
+    # EXAMPLE 2: Advanced Field Features and Access Controls
+    # =============================================================================
+    # This demonstrates:
+    # - Field-level access controls (read-only, write-only fields)
+    # - Different enum patterns (default values, catch_all)
+    # - Signed integer fields
+    # - Mixed field access in single register
+    # - Reset values and default behavior
+ControlRegister:
+  # REG01H
+  type: register
+  address: 0x1
+  size_bits: 8
+  # This register allows both read and write operations
+  access: RW
+  # Reset value - the default value when register is reset/initialized
+  reset_value: 0x42 # Can also be specified as array: [0x42]
+  description: |
+    Example control register demonstrating field-level access controls,
+    different enum patterns, and mixed read/write capabilities.
+  fields:
+    # Read-only field - generates only a getter, no setter
+    device_ready:
+      base: bool
+      start: 7
+      access: RO # Override field access to read-only
+      description: "Device ready status (read-only hardware flag)."
+
+    # Write-only field - generates only a setter, no getter
+    trigger_calibration:
+      base: bool
+      start: 6
+      access: WO # Override field access to write-only
+      description: "Write 1 to trigger calibration sequence (write-only trigger)."
+
+    # Enum with default value - if raw value doesn't match any variant,
+    # returns the default. Also implements Default trait.
+    operation_mode:
+      base: uint
+      start: 4
+      end: 6 # 2 bits
+      description: "Device operation mode."
+      conversion:
+        name: OperationMode
+        Sleep: { value: 0, description: "Low power sleep mode" }
+        Normal: { value: 1, description: "Normal operation mode" }
+        HighSpeed: { value: 2, description: "High speed mode" }
+        # default makes this the fallback for unknown values AND implements Default
+        Diagnostic: { value: "default", description: "Diagnostic mode (default)" }
+
+    # Signed integer field (can represent negative numbers)
+    temperature_offset:
+      base: int # signed integer
+      start: 1
+      end: 4 # 3 bits: can represent -4 to +3 in two's complement
+      description: "Temperature calibration offset (-4 to +3 degrees)."
+
+    # Enum with catch_all - captures unknown values with the raw data
+    error_code:
+      base: uint
+      start: 0
+      end: 1 # 1 bit, but demonstrates catch_all concept
+      description: "Error status code."
+      conversion:
+        name: ErrorCode
+        NoError: { value: 0, description: "No error detected" }
+        # catch_all captures any value not explicitly defined
+        # Creates variant like: UnknownError(u8) containing the raw value
+        UnknownError: { value: "catch_all", description: "Unknown error code" }
+
+# =============================================================================
+# EXAMPLE 3: Multi-byte Register with Byte Ordering
+# =============================================================================
+# This demonstrates:
+# - 16-bit register spanning multiple bytes
+# - Byte ordering specification (overrides global default)
+# - Bit ordering specification
+# - Large integer fields spanning byte boundaries
+# - Reset value as byte array
+# - Fields crossing byte boundaries
+MultiByteRegister:
+  # REG04H-REG05H
+  type: register
+  address: 0x4
+  size_bits: 16 # 2 bytes
+  access: RW
+  # Override global byte order for this register
+  # LE = Little Endian: byte 0 is least significant
+  # BE = Big Endian: byte 0 is most significant
+  byte_order: LE # Little endian byte order
+  # LSB0 = bit 0 is least significant bit of each byte
+  # MSB0 = bit 0 is most significant bit of each byte  
+  bit_order: LSB0
+  # Reset value as byte array [low_byte, high_byte] for LE
+  # For BE it would be [high_byte, low_byte]
+  reset_value: [ 0x34, 0x12 ] # Results in 0x1234 in little endian
+  description: |
+    Example 16-bit register demonstrating multi-byte handling, byte ordering,
+    and fields that span across byte boundaries.
+  fields:
+    # Large field spanning multiple bytes
+    measurement_value:
+      base: uint
+      start: 0
+      end: 12 # 12 bits total, spans across bytes
+      description: "Measurement result (0-4095 range)."
+
+    # Field in upper bits
+    measurement_valid:
+      base: bool
+      start: 12
+      description: "Measurement validity flag."
+
+    # Small enum field
+    sensor_gain:
+      base: uint
+      start: 13
+      end: 15 # 2 bits
+      description: "Sensor gain setting."
+      conversion:
+        name: SensorGain
+        Gain1x: { value: 0, description: "1x gain" }
+        Gain2x: { value: 1, description: "2x gain" }
+        Gain4x: { value: 2, description: "4x gain" }
+        Gain8x: { value: 3, description: "8x gain" }
+
+    # Single bit at the top
+    calibration_done:
+      base: bool
+      start: 15
+      description: "Calibration completion flag."
+
+# =============================================================================
+# EXAMPLE 4: Repeated Registers
+# =============================================================================
+# This demonstrates:
+# - Register repetition with count and stride
+# - How repeated registers generate indexed access functions
+# - Consistent field structure across multiple instances
+DataBuffer:
+  # REG06H-REG0BH (6 instances)
+  type: register
+  address: 0x6
+  size_bits: 8
+  access: RW
+  reset_value: 0x0
+  # Repeat this register 6 times with stride of 1
+  # This creates DataBuffer[0] at 0x06, DataBuffer[1] at 0x07, etc.
+  # Address calculation: base_address + (index * stride)
+  repeat:
+    count: 6 # Create 6 instances
+    stride: 1 # Each instance is 1 address unit apart
+  description: |
+    General purpose data buffer registers (6 instances).
+    Demonstrates repeated register pattern - common for register arrays,
+    FIFO buffers, or configuration banks.
+
+    Generated functions: device.data_buffer(index).read/write/modify()
+    where index is 0-5.
+  fields:
+    value:
+      base: uint
+      start: 0
+      end: 8
+      description: "8-bit data storage value."
+
+# =============================================================================
+# EXAMPLE 5: Register References (Refs)
+# =============================================================================
+# This demonstrates:
+# - Creating references to existing registers with overrides
+# - Overriding specific properties while keeping field structure
+# - Different reset values for similar registers
+# - How refs create identical API with different names
+
+# First, define a base register template
+ConfigurationTemplate:
+  type: register
+  address: 0x10 # This will be overridden in refs
+  size_bits: 8
+  access: RW
+  reset_value: 0x42
+  description: "Template for configuration registers."
+  fields:
+    enable:
+      base: bool
+      start: 7
+      description: "Feature enable flag."
+
+    priority:
+      base: uint
+      start: 4
+      end: 7 # 3 bits
+      description: "Priority level (0-7)."
+
+    mode:
+      base: uint
+      start: 2
+      end: 4
+      description: "Operating mode selection."
+      conversion:
+        name: ConfigMode
+        Disabled: { value: 0, description: "Feature disabled" }
+        Basic: { value: 1, description: "Basic operation mode" }
+        Advanced: { value: 2, description: "Advanced operation mode" }
+        Expert: { value: 3, description: "Expert mode with all features" }
+
+    auto_calibrate:
+      base: bool
+      start: 1
+      description: "Automatic calibration enable."
+
+    invert_output:
+      base: bool
+      start: 0
+      description: "Invert output signal."
+
+# Reference to the template with overrides - creates identical structure
+# but at different address and with different reset value
+Channel0Config:
+  type: ref
+  target: ConfigurationTemplate
+  description: "Channel 0 configuration register (based on ConfigurationTemplate)."
+  override:
+    type: register
+    address: 0x11 # Override address
+    reset_value: 0x80 # Override reset value
+    # All fields remain the same as ConfigurationTemplate
+
+Channel1Config:
+  type: ref
+  target: ConfigurationTemplate
+  description: "Channel 1 configuration register (based on ConfigurationTemplate)."
+  override:
+    type: register
+    address: 0x12 # Different address
+    reset_value: 0x0 # Different reset value
+    # Could also override access, description, etc.
+
+    # =============================================================================
+    # EXAMPLE 6: ADC-Style Raw Data Register
+    # =============================================================================
+    # This demonstrates:
+    # - Raw data registers (common for ADC readings)
+    # - 16-bit data with helper conversion comments
+    # - Read-only measurement data
+    # - How to handle raw sensor values that need processing
+AdcRawData:
+  # REG20H-REG21H
+  type: register
+  address: 0x20
+  size_bits: 16
+  access: RO # ADC data is typically read-only
+  byte_order: BE # ADC data often comes in big-endian format
+  description: |
+    Raw ADC measurement data register. This is a common pattern for
+    sensor readings that need post-processing.
+
+    Usage: Read raw value and convert using helper functions:
+    let raw = device.adc_raw_data().read()?.raw();
+    let voltage_mv = raw_to_voltage_mv(raw);  // Custom conversion function
+
+    This pattern is used when the conversion formula is complex or
+    device-specific and better handled in custom code.
+  fields:
+    raw:
+      base: uint
+      start: 0
+      end: 16
+      description: |
+        Raw 16-bit ADC value. Use helper functions to convert to physical units.
+        Example conversion: voltage_mv = (raw * 3300) / 65535
+
+# =============================================================================
+# EXAMPLE 7: Conversion to External Types
+# =============================================================================
+# This demonstrates:
+# - Converting fields to external/custom types
+# - Using try_conversion for fallible conversions
+# - How to handle types defined elsewhere in your project
+ExternalTypeExample:
+  type: register
+  address: 0x30
+  size_bits: 8
+  access: RW
+  description: |
+    Example showing conversion to external types defined in your crate.
+    The device-driver toolkit can convert field values to custom types
+    that implement From/TryFrom traits.
+  fields:
+    # Conversion to custom type (infallible)
+    # Your crate must define: impl From<u8> for MyCustomType
+    # and impl From<MyCustomType> for u8 (for writing)
+    custom_value:
+      base: uint
+      start: 0
+      end: 4 # 4 bits -> u8 -> MyCustomType
+      description: "Value converted to custom type."
+      # The conversion field references a type in your crate
+      # Use "super::" prefix to access parent module types
+      conversion: "super::MyCustomType"
+
+    # Fallible conversion to custom type
+    # Your crate must define: impl TryFrom<u8> for MyFallibleType  
+    # Returns Result<MyFallibleType, ConversionError> instead of direct value
+    fallible_value:
+      base: uint
+      start: 4
+      end: 8 # 4 bits -> u8 -> Result<MyFallibleType, _>
+      description: "Value with fallible conversion (returns Result)."
+      try_conversion: "super::MyFallibleType"
+
+# =============================================================================
+# EXAMPLE 8: Overlapping Bits (Advanced Usage)
+# =============================================================================
+# This demonstrates:
+# - allow_bit_overlap for registers with overlapping field definitions
+# - Different ways to interpret the same bits
+# - Useful for registers with multiple valid interpretations
+OverlapRegister:
+  type: register
+  address: 0x40
+  size_bits: 8
+  access: RW
+  # Allow fields to have overlapping bit ranges
+  allow_bit_overlap: true
+  description: |
+    Example register with overlapping bit fields. This pattern is useful
+    when the same bits can be interpreted in multiple ways depending on
+    context or mode settings.
+  fields:
+    # Full 8-bit access
+    full_value:
+      base: uint
+      start: 0
+      end: 8
+      description: "Full 8-bit register value."
+
+    # Lower nibble (overlaps with full_value)
+    lower_nibble:
+      base: uint
+      start: 0
+      end: 4
+      description: "Lower 4 bits as separate value."
+
+    # Upper nibble (overlaps with full_value) 
+    upper_nibble:
+      base: uint
+      start: 4
+      end: 8
+      description: "Upper 4 bits as separate value."
+
+    # Individual bit flags that overlap with nibbles
+    flag0:
+      base: bool
+      start: 0
+      description: "Individual flag bit (overlaps with lower_nibble)."
+
+    flag7:
+      base: bool
+      start: 7
+      description: "Individual flag bit (overlaps with upper_nibble)."
+
+# =============================================================================
+# USAGE PATTERNS AND BEST PRACTICES
+# =============================================================================
+
+# BASIC USAGE:
+# 1. Copy this template to your project
+# 2. Replace examples with your device's actual registers  
+# 3. Update config section with your device's requirements
+# 4. Use in your Rust code with the device-driver macro:
+#
+# device_driver::create_device!(
+#     device_name: MyDevice,
+#     manifest: "path/to/your/device.yaml"
+# );
+#
+# let mut device = MyDevice::new(your_interface);
+# device.power_status().read()?;
+# device.control_register().modify(|reg| reg.set_operation_mode(OperationMode::Normal))?;
+
+# COMMON REGISTER PATTERNS:
+# - Status registers: RO access, boolean flags, enum states
+# - Control registers: RW access, enable flags, mode selections  
+# - Configuration registers: RW access, multi-bit parameters, reset values
+# - Data registers: RO/RW access, raw values or processed with conversions
+# - ADC registers: RO access, raw values with post-processing
+
+# FIELD PATTERNS:
+# - Single bits: Use bool base type with single start position
+# - Multi-bit integers: Use uint/int with start/end range
+# - Enums: Use uint base with conversion block for named values
+# - Reserved bits: Simply don't define fields for those positions
+
+# BYTE ORDERING GUIDE:
+# - LE (Little Endian): Low byte at low address (0x1234 → [0x34, 0x12])
+# - BE (Big Endian): High byte at low address (0x1234 → [0x12, 0x34])
+# - LSB0: Bit 0 is least significant bit of each byte
+# - MSB0: Bit 0 is most significant bit of each byte
+# - When in doubt, check your device datasheet's SPI/I2C examples
+
+# ADVANCED FEATURES:
+# - Commands: For device operations that send/receive structured data
+# - Buffers: For streaming data like FIFOs
+# - Blocks: For grouping related registers with address offsets
+# - CFG gating: Conditional compilation with #[cfg] attributes
+
+# ERROR HANDLING:
+# - All register operations return Results
+# - Interface errors bubble up from your bus implementation  
+# - Conversion errors occur with try_conversion fields
+# - Always handle errors appropriately in your application
+
+# TESTING:
+# - Create mock interfaces for unit testing
+# - Test different register access patterns
+# - Verify enum conversions and edge cases
+# - Test with different feature flags if using cfg
+
+# =============================================================================
+# ADDITIONAL RESOURCES AND EXAMPLES
+# =============================================================================
+
+# OFFICIAL DOCUMENTATION:
+# - Main repository: https://github.com/diondokter/device-driver
+# - API documentation: https://docs.rs/device-driver
+# - Book/tutorial: Available in the repository
+
+# REAL-WORLD EXAMPLES:
+# Existing drivers using this toolkit:
+# - S2-LP radio transceiver
+# - Nordic nPM1300 Power Management IC  
+# - iqs323 capacitive sensing controller
+# - VCNL36825T proximity sensor
+# - AXP192 Power Management IC (original source for this template)
+# - ONSEMI FUSB302B USB-PD PHY
+# - iC-Haus iC-MD quadrature counter
+
+# COMMON GOTCHAS:
+# - Bit ranges are [start, end) - end is exclusive
+# - Byte arrays in reset_value must match your byte_order
+# - External type conversions need From/TryFrom implementations
+# - CFG attributes are passed through without validation
+# - Register addresses must fit in the configured address type
+
+# PERFORMANCE NOTES:
+# - Generated code is zero-cost abstractions
+# - Bit manipulations compile to efficient operations
+# - No runtime overhead for field access
+# - Enum conversions are compile-time resolved when possible
+
+# =============================================================================
+# TEMPLATE END - REMOVE THESE COMMENTS IN YOUR ACTUAL DRIVER  
+# =============================================================================
