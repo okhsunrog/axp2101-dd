@@ -199,7 +199,7 @@ CommonConfig:
   address: 0x10
   size_bits: 8
   access: RW
-  reset_value: 0x5c # Based on default values from datasheet
+  reset_value: 0x30 # Default 0x30 based on datasheet values
   description: |
     Common configuration register controlling various system behaviors including
     discharge control, restart functionality, and power-off controls.
@@ -252,6 +252,62 @@ BatfetControl:
       base: bool
       start: 1
       description: "BATFET close when OCP (6A) for 100us (true: enable, false: disable)."
+
+DieTempControl:
+  # REG13H - die_temp_cfg
+  type: register
+  address: 0x13
+  size_bits: 8
+  access: RW
+  reset_value: 0x3 # die_temp_det=1, die_otp_thld=01b (125deg)
+  description: |
+    Die temperature control register for setting over-temperature protection
+    and enabling temperature detection.
+  fields:
+    # Bits 7:3 are reserved
+    die_over_temp_protection_threshold:
+      base: uint
+      start: 1
+      end: 3 # 2 bits
+      description: "DIE Over Temperature Protection Level1 Config."
+      conversion:
+        name: DieOverTempThreshold
+        Deg115: { value: 0b00, description: "115°C" }
+        Deg125: { value: 0b01, description: "125°C" }
+        Deg135: { value: 0b10, description: "135°C" }
+        Reserved: { value: 0b11, description: "Reserved" }
+    die_temp_detect_enable:
+      base: bool
+      start: 0
+      description: "DIE Temperature Detect Enable (true: enable, false: disable)."
+
+MinSystemVoltageControl:
+  # REG14H - vsys_min
+  type: register
+  address: 0x14
+  size_bits: 8
+  access: RW
+  reset_value: 0x60 # In_vsys_dpm=110b for 4.7V
+  description: |
+    Minimum system voltage control.
+  fields:
+    # Bit 7 is reserved
+    in_vsys_dpm:
+      base: uint
+      start: 4
+      end: 7 # 3 bits
+      description: "Linear Charger Vsys voltage dpm. 4.1V + N*0.1V"
+      conversion:
+        name: MinSystemVoltage
+        V4_1: { value: 0b000, description: "4.1V" }
+        V4_2: { value: 0b001, description: "4.2V" }
+        V4_3: { value: 0b010, description: "4.3V" }
+        V4_4: { value: 0b011, description: "4.4V" }
+        V4_5: { value: 0b100, description: "4.5V" }
+        V4_6: { value: 0b101, description: "4.6V" }
+        V4_7: { value: 0b110, description: "4.7V" }
+        V4_8: { value: 0b111, description: "4.8V" }
+    # Bits 3:0 are reserved
 
 VindpmConfig:
   # REG15H - vindpm_cfg
@@ -318,6 +374,437 @@ InputCurrentLimit:
         Reserved2: { value: 0b111, description: "Reserved" }
 
 # =============================================================================
+# POWER ON/OFF AND RESET REGISTERS
+# =============================================================================
+
+PowerOnStatus:
+  # REG20H - pwron_stat
+  type: register
+  address: 0x20
+  size_bits: 8
+  access: RO
+  description: "Indicates the source of the power-on event."
+  fields:
+    en_pwron_stat:
+      base: bool
+      start: 5
+      description: "POWERON always high when EN Mode as POWERON Source (true: yes, false: no)."
+    bat_pwron_stat:
+      base: bool
+      start: 4
+      description: "Battery Insert and Good as POWERON Source (true: yes, false: no)."
+    chg_pwron_stat:
+      base: bool
+      start: 3
+      description: "Battery Voltage > 3.3V when Charged as POWERON Source (true: yes, false: no)."
+    vbus_pwron_stat:
+      base: bool
+      start: 2
+      description: "Vbus Insert and Good as POWERON Source (true: yes, false: no)."
+    irq_pwron_stat:
+      base: bool
+      start: 1
+      description: "IRQ PIN Pull-down as POWERON Source (true: yes, false: no)."
+    btn_pwron_stat:
+      base: bool
+      start: 0
+      description: "POWERON low for onlevel when POWERON Mode as POWERON Source (true: yes, false: no)."
+
+PowerOffStatus:
+  # REG21H - pwroff_stat
+  type: register
+  address: 0x21
+  size_bits: 8
+  access: RO
+  description: "Indicates the source of the power-off event."
+  fields:
+    dot_pwroff_stat:
+      base: bool
+      start: 7
+      description: "Die Over Temperature as POWEROFF Source (true: yes, false: no)."
+    dcov_pwroff_stat:
+      base: bool
+      start: 6
+      description: "DCDC Over Voltage as POWEROFF Source (true: yes, false: no)."
+    dcuv_pwroff_stat:
+      base: bool
+      start: 5
+      description: "DCDC Under Voltage as POWEROFF Source (true: yes, false: no)."
+    vbov_pwroff_stat:
+      base: bool
+      start: 4
+      description: "VBUS Over Voltage as POWEROFF Source (true: yes, false: no)."
+    vsuv_pwroff_stat:
+      base: bool
+      start: 3
+      description: "Vsys Under Voltage as POWEROFF Source (true: yes, false: no)."
+    en_pwroff_stat:
+      base: bool
+      start: 2
+      description: "POWERON always low when EN Mode as POWEROFF Source (true: yes, false: no)."
+    sw_pwroff_stat:
+      base: bool
+      start: 1
+      description: "Software config as POWEROFF Source (true: yes, false: no)."
+    btn_pwroff_stat:
+      base: bool
+      start: 0
+      description: "POWERON Pull down for offlevel when POWERON Mode as POWEROFF Source (true: yes, false: no)."
+
+PowerOffEnable:
+  # REG22H - pwroff_en
+  type: register
+  address: 0x22
+  size_bits: 8
+  access: RW
+  description: "Enables different sources for power-off events."
+  fields:
+    dot_pwroff_en:
+      base: bool
+      start: 2
+      description: "DIE Over-Temperature (LEVEL2) as POWEROFF Source enable (true: enable, false: disable)."
+    btn_pwroff_en:
+      base: bool
+      start: 1
+      description: "PWRON > OFFLEVEL as POWEROFF Source enable (true: enable, false: disable)."
+    btn_pwroff_mode:
+      base: bool
+      start: 0
+      description: "Function Select when btn_pwroff_en=1 and button power-off occur (0: Power-off, 1: Restart)."
+
+DcdcPowerOffControl:
+  # REG23H - dcdc_pwroff_en
+  type: register
+  address: 0x23
+  size_bits: 8
+  access: RW
+  description: "Controls DCDC OVP/UVP power-off enables."
+  fields:
+    dcdc_ovp_en:
+      base: bool
+      start: 5
+      description: "DCDC 120%(130%) high voltage turn off PMIC function (true: enable, false: disable)."
+    dcdc4_uvp_en:
+      base: bool
+      start: 3
+      description: "DCDC4 85% low voltage turn off PMIC function (true: enable, false: disable)."
+    dcdc3_uvp_en:
+      base: bool
+      start: 2
+      description: "DCDC3 85% low voltage turn off PMIC function (true: enable, false: disable)."
+    dcdc2_uvp_en:
+      base: bool
+      start: 1
+      description: "DCDC2 85% low voltage turn off PMIC function (true: enable, false: disable)."
+    dcdc1_uvp_en:
+      base: bool
+      start: 0
+      description: "DCDC1 85% low voltage turn off PMIC function (true: enable, false: disable)."
+
+VoffThreshold:
+  # REG24H - voff_thld
+  type: register
+  address: 0x24
+  size_bits: 8
+  access: RW
+  description: "Vsys voltage for POWEROFF threshold setting."
+  fields:
+    voff_thld:
+      base: uint
+      start: 0
+      end: 3 # 3 bits
+      description: "Battery Voltage for POWEROFF (2.6V + N*0.1V)."
+      conversion:
+        name: VoffVoltage
+        V2_6: { value: 0b000, description: "2.6V" }
+        V2_7: { value: 0b001, description: "2.7V" }
+        V2_8: { value: 0b010, description: "2.8V" }
+        V2_9: { value: 0b011, description: "2.9V" }
+        V3_0: { value: 0b100, description: "3.0V" }
+        V3_1: { value: 0b101, description: "3.1V" }
+        V3_2: { value: 0b110, description: "3.2V" }
+        V3_3: { value: 0b111, description: "3.3V" }
+
+PowerTimingControl:
+  # REG25H - pwr_time_ctr1
+  type: register
+  address: 0x25
+  size_bits: 8
+  access: RW
+  description: "PWROK setting and PWROFF sequence control."
+  fields:
+    pwrok_chk_en:
+      base: bool
+      start: 4
+      description: "Check the PWROK Pin enable after all dcdc/ldo output valid 128ms (true: enable, false: disable)."
+    pwroff_dly_en:
+      base: bool
+      start: 3
+      description: "POWEROFF Delay 4ms after PWROK disable (true: enable, false: disable)."
+    pwroff_seq_ctrl:
+      base: bool
+      start: 2
+      description: "POWEROFF Sequence Control (0: At the same time, 1: the reverse of the Startup)."
+    pwrok_dly:
+      base: uint
+      start: 0
+      end: 2 # 2 bits
+      description: "Delay of PWROK after all power output good."
+      conversion:
+        name: PwrokDelay
+        Ms8: { value: 0b00, description: "8ms" }
+        Ms16: { value: 0b01, description: "16ms" }
+        Ms32: { value: 0b10, description: "32ms" }
+        Ms64: { value: 0b11, description: "64ms" }
+
+SleepWakeupControl:
+  # REG26H - sleep_cfg
+  type: register
+  address: 0x26
+  size_bits: 8
+  access: RW
+  description: "Sleep and wakeup control."
+  fields:
+    irq_wakeup_en:
+      base: bool
+      start: 4
+      description: "IRQ Pin low to Wakeup (true: enable, false: disable)."
+    pwrok_wakeup_ind:
+      base: bool
+      start: 3
+      description: "PWROK be low-level enable when Wakup (true: enable, false: disable)."
+    wakeup_cfg_sel:
+      base: bool
+      start: 2
+      description: "DCDC/LDO Voltage Select when Wakup (0: The Default, 1: The voltage before wakup)."
+    wakeup_en:
+      base: bool
+      start: 1
+      description: "Wake Up enable (true: enable, false: disable)."
+    sleep_en:
+      base: bool
+      start: 0
+      description: "SLEEP enable (true: enable, false: disable)."
+
+PowerOnLevel:
+  # REG27H - ponlevel
+  type: register
+  address: 0x27
+  size_bits: 8
+  access: RW
+  description: "IRQLEVEL/OFFLEVEL/ONLEVEL setting."
+  fields:
+    irq_level:
+      base: uint
+      start: 4
+      end: 6 # 2 bits
+      description: "IRQLEVEL config."
+      conversion:
+        name: IrqLevel
+        S1: { value: 0b00, description: "1s" }
+        S1_5: { value: 0b01, description: "1.5s" }
+        S2: { value: 0b10, description: "2s" }
+        S2_5: { value: 0b11, description: "2.5s" }
+    off_level:
+      base: uint
+      start: 2
+      end: 4 # 2 bits
+      description: "OFFLEVEL config."
+      conversion:
+        name: OffLevel
+        S4: { value: 0b00, description: "4s" }
+        S6: { value: 0b01, description: "6s" }
+        S8: { value: 0b10, description: "8s" }
+        S10: { value: 0b11, description: "10s" }
+    on_level:
+      base: uint
+      start: 0
+      end: 2 # 2 bits
+      description: "ONLEVEL config."
+      conversion:
+        name: OnLevel
+        Ms128: { value: 0b00, description: "128ms" }
+        Ms512: { value: 0b01, description: "512ms" }
+        S1: { value: 0b10, description: "1s" }
+        S2: { value: 0b11, description: "2s" }
+
+FastPowerOnConfig0:
+  # REG28H - fast_pwron_cfg0
+  type: register
+  address: 0x28
+  size_bits: 8
+  access: RW
+  description: "Fast power-on setting for DCDCs."
+  fields:
+    dcdc4_fstart_seq:
+      base: uint
+      start: 6
+      end: 8 # 2 bits
+      description: "DCDC4 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
+    dcdc3_fstart_seq:
+      base: uint
+      start: 4
+      end: 6 # 2 bits
+      description: "DCDC3 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
+    dcdc2_fstart_seq:
+      base: uint
+      start: 2
+      end: 4 # 2 bits
+      description: "DCDC2 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
+    dcdc1_fstart_seq:
+      base: uint
+      start: 0
+      end: 2 # 2 bits
+      description: "DCDC1 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
+
+FastPowerOnConfig1:
+  # REG29H - fast_pwron_cfg1
+  type: register
+  address: 0x29
+  size_bits: 8
+  access: RW
+  description: "Fast power-on setting for ALDOs."
+  fields:
+    aldo3_fstart_seq:
+      base: uint
+      start: 6
+      end: 8 # 2 bits
+      description: "ALDO3 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
+    aldo2_fstart_seq:
+      base: uint
+      start: 4
+      end: 6 # 2 bits
+      description: "ALDO2 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
+    aldo1_fstart_seq:
+      base: uint
+      start: 2
+      end: 4 # 2 bits
+      description: "ALDO1 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
+
+FastPowerOnConfig2:
+  # REG2AH - fast_pwron_cfg2
+  type: register
+  address: 0x2a
+  size_bits: 8
+  access: RW
+  description: "Fast power-on setting for CPUSLDO, BLDOs, and ALDO4."
+  fields:
+    cpusldo_fstart_seq:
+      base: uint
+      start: 6
+      end: 8 # 2 bits
+      description: "CPUSLDO Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
+    bldo2_fstart_seq:
+      base: uint
+      start: 4
+      end: 6 # 2 bits
+      description: "BLDO2 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
+    bldo1_fstart_seq:
+      base: uint
+      start: 2
+      end: 4 # 2 bits
+      description: "BLDO1 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
+    aldo4_fstart_seq:
+      base: uint
+      start: 0
+      end: 2 # 2 bits
+      description: "ALDO4 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
+
+FastPowerOnConfig3:
+  # REG2BH - fast_pwron_cfg3
+  type: register
+  address: 0x2b
+  size_bits: 8
+  access: RW
+  description: "Fast power-on setting and control for DLDOs."
+  fields:
+    fast_pwron_en:
+      base: bool
+      start: 7
+      description: "Fast Power On Enable (true: enable, false: disable)."
+    fast_wakeup_en:
+      base: bool
+      start: 6
+      description: "Fast Wake up Enable (true: enable, false: disable)."
+    dldo2_fstart_seq:
+      base: uint
+      start: 2
+      end: 4 # 2 bits
+      description: "DLDO2 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
+    dldo1_fstart_seq:
+      base: uint
+      start: 0
+      end: 2 # 2 bits
+      description: "DLDO1 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
+
+# =============================================================================
+# ADC Channel Enable Control REGISTERS
+# =============================================================================
+
+AdcChannelEnable0:
+  # REG30H - adc_ch_en0
+  type: register
+  address: 0x30
+  size_bits: 8
+  access: RW
+  description: "ADC Channel enable control."
+  fields:
+    gpadc_ch_en:
+      base: bool
+      start: 5
+      description: "general purpose ADC channel enable (true: enable, false: disable)."
+    tdie_ch_en:
+      base: bool
+      start: 4
+      description: "die temperature measure ADC channel enable (true: enable, false: disable)."
+    vsys_ch_en:
+      base: bool
+      start: 3
+      description: "system voltage measure ADC channel enable (true: enable, false: disable)."
+    vbus_ch_en:
+      base: bool
+      start: 2
+      description: "vbus voltage measure ADC channel enable (true: enable, false: disable)."
+    ts_ch_en:
+      base: bool
+      start: 1
+      description: "TS pin measure ADC channel enable (true: enable, false: disable)."
+    vbat_ch_en:
+      base: bool
+      start: 0
+      description: "battery voltage measure ADC channel enable (true: enable, false: disable)."
+
+BatteryParameter:
+  # REGA1H - brom
+  type: register
+  address: 0xa1
+  size_bits: 8
+  access: RW
+  description: "Battery parameter ROM."
+  fields:
+    brom:
+      base: uint
+      start: 0
+      end: 8
+
+FuelGaugeControl:
+  # REGA2H - config
+  type: register
+  address: 0xa2
+  size_bits: 8
+  access: RW
+  description: "Fuel gauge control."
+  fields:
+    rom_sel:
+      base: bool
+      start: 4
+      description: "ROM or SRAM select (1: select sram, 0: select rom)."
+    bromup_en:
+      base: bool
+      start: 0
+      description: "brom writer control (1: enable, 0: disable)."
+
+# =============================================================================
 # CHARGER CONTROL REGISTERS
 # =============================================================================
 
@@ -352,6 +839,68 @@ ModuleEnable:
       base: bool
       start: 0
       description: "Watchdog module enable (true: enable, false: disable)."
+
+WatchdogControl:
+  # REG19H - watchdog_cfg
+  type: register
+  address: 0x19
+  size_bits: 8
+  access: RW
+  reset_value: 0x6 # watchdog_cfg=110b (64s)
+  description: "Watchdog timer control."
+  fields:
+    # Bits 7:6 are reserved
+    watchdog_reset_config:
+      base: uint
+      start: 4
+      end: 6 # 2 bits
+      description: "Watchdog Reset Config."
+      conversion:
+        name: WatchdogResetConfig
+        IrqOnly: { value: 0b00, description: "IRQ only" }
+        IrqAndSystemReset: { value: 0b01, description: "IRQ and System Reset" }
+        IrqResetAndPwrokLow: { value: 0b10, description: "IRQ, System Reset and Pull down PWROK 1s" }
+        IrqResetAndPowerCycle: { value: 0b11, description: "IRQ, System Reset, DCDC/LDO PWROFF & PWRON" }
+    watchdog_clear:
+      base: bool
+      start: 3
+      access: WO # Write-only, auto-clears
+      description: "Watchdog clear signal (true: clear)."
+    watchdog_timer:
+      base: uint
+      start: 0
+      end: 3 # 3 bits
+      description: "TWSI watchdog timer config."
+      conversion:
+        name: WatchdogTimer
+        S1: { value: 0b000, description: "1s" }
+        S2: { value: 0b001, description: "2s" }
+        S4: { value: 0b010, description: "4s" }
+        S8: { value: 0b011, description: "8s" }
+        S16: { value: 0b100, description: "16s" }
+        S32: { value: 0b101, description: "32s" }
+        S64: { value: 0b110, description: "64s" }
+        S128: { value: 0b111, description: "128s" }
+
+LowBatteryWarningThreshold:
+  # REG1AH - gauge_thld
+  type: register
+  address: 0x1a
+  size_bits: 8
+  access: RW
+  reset_value: 0xa1 # warn_thld=1010b (15%), shutdown_thld=0001b (1%)
+  description: "Low battery warning threshold setting."
+  fields:
+    warning_threshold:
+      base: uint
+      start: 4
+      end: 8 # 4 bits
+      description: "Low battery warning threshold 5-20%, 1% per step. (value + 5)%"
+    shutdown_threshold:
+      base: uint
+      start: 0
+      end: 4 # 4 bits
+      description: "Low battery shutdown threshold 0-15%, 1% per step."
 
 PrechargeCurrentConfig:
   # REG61H - iprechg_cfg
@@ -503,11 +1052,6 @@ DcdcConfig0:
       base: bool
       start: 5
       description: "DVM voltage ramp control (true: 31.250us/step, false: 15.625us/step)."
-
-    dcdc5_enable:
-      base: bool
-      start: 4
-      description: "DCDC5 enable (true: enable, false: disable)."
 
     dcdc4_enable:
       base: bool
@@ -706,6 +1250,138 @@ LdoEnableConfig0:
       start: 0
       description: "ALDO1 enable (true: enable, false: disable)."
 
+LdoEnableConfig1:
+  # REG91H - ldo_en_cfg1
+  type: register
+  address: 0x91
+  size_bits: 8
+  access: RW
+  description: |
+    LDO enable configuration register 1.
+    Controls enable/disable state for DLDO2.
+  fields:
+    dldo2_enable:
+      base: bool
+      start: 0
+      description: "DLDO2 enable (true: enable, false: disable)."
+
+Aldo1VoltageConfig:
+  # REG92H - aldo1_cfg
+  type: register
+  address: 0x92
+  size_bits: 8
+  access: RW
+  description: "ALDO1 output voltage config (0.5-3.5V, 100mV/step)."
+  fields:
+    voltage_setting:
+      base: uint
+      start: 0
+      end: 5 # 5 bits
+
+Aldo2VoltageConfig:
+  # REG93H - aldo2_cfg
+  type: register
+  address: 0x93
+  size_bits: 8
+  access: RW
+  description: "ALDO2 output voltage config (0.5-3.5V, 100mV/step)."
+  fields:
+    voltage_setting:
+      base: uint
+      start: 0
+      end: 5 # 5 bits
+
+Aldo3VoltageConfig:
+  # REG94H - aldo3_cfg
+  type: register
+  address: 0x94
+  size_bits: 8
+  access: RW
+  description: "ALDO3 output voltage config (0.5-3.5V, 100mV/step)."
+  fields:
+    voltage_setting:
+      base: uint
+      start: 0
+      end: 5 # 5 bits
+
+Aldo4VoltageConfig:
+  # REG95H - aldo4_cfg
+  type: register
+  address: 0x95
+  size_bits: 8
+  access: RW
+  description: "ALDO4 output voltage config (0.5-3.5V, 100mV/step)."
+  fields:
+    voltage_setting:
+      base: uint
+      start: 0
+      end: 5 # 5 bits
+
+Bldo1VoltageConfig:
+  # REG96H - bldo1_cfg
+  type: register
+  address: 0x96
+  size_bits: 8
+  access: RW
+  description: "BLDO1 output voltage config (0.5-3.5V, 100mV/step)."
+  fields:
+    voltage_setting:
+      base: uint
+      start: 0
+      end: 5 # 5 bits
+
+Bldo2VoltageConfig:
+  # REG97H - bldo2_cfg
+  type: register
+  address: 0x97
+  size_bits: 8
+  access: RW
+  description: "BLDO2 output voltage config (0.5-3.5V, 100mV/step)."
+  fields:
+    voltage_setting:
+      base: uint
+      start: 0
+      end: 5 # 5 bits
+
+CpuSldoVoltageConfig:
+  # REG98H - cpusldo_cfg
+  type: register
+  address: 0x98
+  size_bits: 8
+  access: RW
+  description: "CPUSLDO output voltage config (0.5-1.4V, 50mV/step)."
+  fields:
+    voltage_setting:
+      base: uint
+      start: 0
+      end: 5 # 5 bits
+
+Dldo1VoltageConfig:
+  # REG99H - dldo1_cfg
+  type: register
+  address: 0x99
+  size_bits: 8
+  access: RW
+  description: "DLDO1 output voltage config (0.5-3.5V, 100mV/step)."
+  fields:
+    voltage_setting:
+      base: uint
+      start: 0
+      end: 5 # 5 bits
+
+Dldo2VoltageConfig:
+  # REG9AH - dldo2_cfg
+  type: register
+  address: 0x9a
+  size_bits: 8
+  access: RW
+  description: "DLDO2 output voltage config (0.5-1.4V, 50mV/step)."
+  fields:
+    voltage_setting:
+      base: uint
+      start: 0
+      end: 5 # 5 bits
+
 # =============================================================================
 # ADC DATA REGISTERS (Read-only, 14-bit values)
 # =============================================================================
@@ -806,6 +1482,22 @@ InternalTemperatureAdc:
       start: 0
       end: 14
       description: "Raw 14-bit temperature ADC value. Use driver helper for temperature conversion."
+
+GpadcAdc:
+  # REG3EH-REG3FH
+  type: register
+  address: 0x3e
+  size_bits: 16
+  access: RO
+  byte_order: BE
+  description: |
+    General purpose ADC reading. 14-bit resolution.
+  fields:
+    raw_value:
+      base: uint
+      start: 0
+      end: 14
+      description: "Raw 14-bit GPADC value."
 
 # =============================================================================
 # INTERRUPT CONTROL REGISTERS
@@ -911,6 +1603,47 @@ IrqEnable1:
       start: 0
       description: "Power key positive edge IRQ enable."
 
+IrqEnable2:
+  # REG42H - irq_en2
+  type: register
+  address: 0x42
+  size_bits: 8
+  access: RW
+  description: "Interrupt enable register 2 for various system events."
+  fields:
+    wdexp_irq_en:
+      base: bool
+      start: 7
+      description: "Watchdog Expire IRQ enable (true: enable, false: disable)."
+    ldooc_irq_en:
+      base: bool
+      start: 6
+      description: "LDO Over Current IRQ enable (true: enable, false: disable)."
+    bocp_irq_en:
+      base: bool
+      start: 5
+      description: "BATFET Over Current Protection IRQ enable (true: enable, false: disable)."
+    chgdn_irq_en:
+      base: bool
+      start: 4
+      description: "Battery charge done IRQ enable (true: enable, false: disable)."
+    chgst_irq_en:
+      base: bool
+      start: 3
+      description: "Charger start IRQ enable (true: enable, false: disable)."
+    dot11_irq_en:
+      base: bool
+      start: 2
+      description: "DIE Over Temperature level1 IRQ enable (true: enable, false: disable)."
+    chgte_irq_en:
+      base: bool
+      start: 1
+      description: "Charger Safety Timer1/2 expire IRQ enable (true: enable, false: disable)."
+    bovp_irq_en:
+      base: bool
+      start: 0
+      description: "Battery Over Voltage Protection IRQ enable (true: enable, false: disable)."
+
 IrqStatus0:
   # REG48H - irq0 (Write 1 to clear)
   type: register
@@ -962,6 +1695,277 @@ IrqStatus0:
       start: 0
       description: "Battery under temperature in work mode IRQ status. Write 1 to clear."
 
+IrqStatus1:
+  # REG49H - irq1 (Write 1 to clear)
+  type: register
+  address: 0x49
+  size_bits: 8
+  access: RW
+  reset_value: 0x0
+  description: "Interrupt status register 1. Corresponds to irq_en1."
+  fields:
+    vinsert_irq:
+      base: bool
+      start: 7
+      description: "VBUS Insert IRQ. Write 1 to clear."
+    vremove_irq:
+      base: bool
+      start: 6
+      description: "VBUS Remove IRQ. Write 1 to clear."
+    binsert_irq:
+      base: bool
+      start: 5
+      description: "Battery Insert IRQ. Write 1 to clear."
+    bremove_irq:
+      base: bool
+      start: 4
+      description: "Battery Remove IRQ. Write 1 to clear."
+    pons_irq:
+      base: bool
+      start: 3
+      description: "POWERON Short PRESS IRQ. Write 1 to clear."
+    ponl_irq:
+      base: bool
+      start: 2
+      description: "POWERON Long PRESS IRQ. Write 1 to clear."
+    ponn_irq:
+      base: bool
+      start: 1
+      description: "POWERON Negative Edge IRQ. Write 1 to clear."
+    ponp_irq:
+      base: bool
+      start: 0
+      description: "POWERON Positive Edge IRQ. Write 1 to clear."
+
+IrqStatus2:
+  # REG4AH - irq2 (Write 1 to clear)
+  type: register
+  address: 0x4a
+  size_bits: 8
+  access: RW
+  reset_value: 0x0
+  description: "Interrupt status register 2. Corresponds to irq_en2."
+  fields:
+    wdexp_irq:
+      base: bool
+      start: 7
+      description: "Watchdog Expire IRQ. Write 1 to clear."
+    ldooc_irq:
+      base: bool
+      start: 6
+      description: "LDO Over Current IRQ. Write 1 to clear."
+    bocp_irq:
+      base: bool
+      start: 5
+      description: "BATFET Over Current Protection IRQ. Write 1 to clear."
+    chgdn_irq:
+      base: bool
+      start: 4
+      description: "Battery charge done IRQ. Write 1 to clear."
+    chgst_irq:
+      base: bool
+      start: 3
+      description: "Battery charge start IRQ. Write 1 to clear."
+    dot11_irq:
+      base: bool
+      start: 2
+      description: "DIE Over Temperature level1 IRQ. Write 1 to clear."
+    chgte_irq:
+      base: bool
+      start: 1
+      description: "Charger Safety Timer1/2 expire IRQ. Write 1 to clear."
+    bovp_irq:
+      base: bool
+      start: 0
+      description: "Battery Over Voltage Protection IRQ. Write 1 to clear."
+
+# =============================================================================
+# TS Pin and GPADC Control Registers
+# =============================================================================
+
+TsPinControl:
+  # REG50H - ts_cfg
+  type: register
+  address: 0x50
+  size_bits: 8
+  access: RW
+  description: "TS pin and GPADC mode control."
+  fields:
+    ts_func:
+      base: bool
+      start: 4
+      description: "TS PIN function select (0: battery temp sensor, 1: external input)."
+    ts_src_en:
+      base: uint
+      start: 2
+      end: 4 # 2 bits
+      description: "TS current source on/off enable."
+      conversion:
+        name: TsSourceEnable
+        Off: { value: 0b00, description: "Off" }
+        OnWhenAdcEnabled: { value: 0b01, description: "On when TS channel of ADC is enabled" }
+        OnWhenTsWorking: { value: 0b10, description: "On only when TS channel is working" }
+        AlwaysOn: { value: 0b11, description: "Always on" }
+    ts_curr:
+      base: uint
+      start: 0
+      end: 2 # 2 bits
+      description: "current source to TS pin config."
+      conversion:
+        name: TsCurrent
+        Ua20: { value: 0b00, description: "20uA" }
+        Ua40: { value: 0b01, description: "40uA" }
+        Ua50: { value: 0b10, description: "50uA" }
+        Ua60: { value: 0b11, description: "60uA" }
+
+TsHysteresisL2H:
+  # REG52H - ts_hys12h
+  type: register
+  address: 0x52
+  size_bits: 8
+  access: RW
+  description: "Hysteresis for TS from low go to normal. Thys = N * 16mV."
+  fields:
+    hysteresis:
+      base: uint
+      start: 0
+      end: 8
+
+TsHysteresisH2L:
+  # REG53H - ts_hysh21
+  type: register
+  address: 0x53
+  size_bits: 8
+  access: RW
+  description: "Hysteresis for TS from high go to normal. Thys = N * 4mV."
+  fields:
+    hysteresis:
+      base: uint
+      start: 0
+      end: 8
+
+VltfChg:
+  # REG54H - vltf_chg
+  type: register
+  address: 0x54
+  size_bits: 8
+  access: RW
+  description: "VLTF in voltage of charge config. VLTF = N * 32mV."
+  fields:
+    threshold:
+      base: uint
+      start: 0
+      end: 8
+
+VhtfChg:
+  # REG55H - vhtf_chg
+  type: register
+  address: 0x55
+  size_bits: 8
+  access: RW
+  description: "VHTF in voltage of charge config. VHTF = N * 2mV."
+  fields:
+    threshold:
+      base: uint
+      start: 0
+      end: 8
+
+VltfWork:
+  # REG56H - vltf_work
+  type: register
+  address: 0x56
+  size_bits: 8
+  access: RW
+  description: "VLTF in voltage of work config. VLTF = N * 32mV."
+  fields:
+    threshold:
+      base: uint
+      start: 0
+      end: 8
+
+VhtfWork:
+  # REG57H - vhtf_work
+  type: register
+  address: 0x57
+  size_bits: 8
+  access: RW
+  description: "VHTF in voltage of work config. VHTF = N * 2mV."
+  fields:
+    threshold:
+      base: uint
+      start: 0
+      end: 8
+
+JeitaEnable:
+  # REG58H - jeita_cfg
+  type: register
+  address: 0x58
+  size_bits: 8
+  access: RW
+  description: "JEITA standard Enable control."
+  fields:
+    jeita_en:
+      base: bool
+      start: 0
+      description: "JEITA Standard Enable (true: enable, false: disable)."
+
+# =============================================================================
+# JEITA Standard Registers
+# =============================================================================
+
+JeitaConfig:
+  # REG59H - jeita_cv_cfg
+  type: register
+  address: 0x59
+  size_bits: 8
+  access: RW
+  description: "JEITA standard charge voltage and current fall settings."
+  fields:
+    jwarm_ifall:
+      base: bool
+      start: 6
+      description: "Current fall of Warm in JEITA Standard (0: 100%, 1: 50%)."
+    jcool_ifall:
+      base: bool
+      start: 4
+      description: "Current fall of Cool in JEITA Standard (0: 100%, 1: 50%)."
+    jwarm_vfall:
+      base: uint
+      start: 2
+      end: 4 # 2 bits
+      description: "Voltage fall of Warm in JEITA Standard."
+    jcool_vfall:
+      base: uint
+      start: 0
+      end: 2 # 2 bits
+      description: "Voltage fall of Cool in JEITA Standard."
+
+JeitaCoolTemp:
+  # REG5AH - jeita_cool
+  type: register
+  address: 0x5a
+  size_bits: 8
+  access: RW
+  description: "Cool Temperature (T2) in voltage of charge config. VHTF = N*16 mV."
+  fields:
+    threshold:
+      base: uint
+      start: 0
+      end: 8
+
+JeitaWarmTemp:
+  # REG5BH - jeita_warm
+  type: register
+  address: 0x5b
+  size_bits: 8
+  access: RW
+  description: "Warm Temperature (T3) in voltage of charge config. VHTF = N*8 mV."
+  fields:
+    threshold:
+      base: uint
+      start: 0
+      end: 8
+
 # =============================================================================
 # FUEL GAUGE REGISTERS
 # =============================================================================
@@ -981,3 +1985,147 @@ BatteryPercentage:
       start: 0
       end: 8
       description: "Battery percentage (0-100%)."
+
+ResetFuelGauge:
+  # REG17H - reset_cfg
+  type: register
+  address: 0x17
+  size_bits: 8
+  access: RW
+  reset_value: 0x0
+  description: "Controls resetting the fuel gauge."
+  fields:
+    # Bits 7:4 are reserved
+    reset_gauge:
+      base: bool
+      start: 3
+      access: WO # Write-only, auto-clears
+      description: "Reset the gauge (true: reset)."
+    reset_logic_gauge:
+      base: bool
+      start: 2
+      description: "Reset the gauge besides registers (true: reset)."
+    # Bits 1:0 are reserved
+
+ThermalRegulationThreshold:
+  # REG65H - tregu_thld
+  type: register
+  address: 0x65
+  size_bits: 8
+  access: RW
+  description: "Thermal regulation threshold setting."
+  fields:
+    tregu_thld:
+      base: uint
+      start: 0
+      end: 2 # 2 bits
+      description: "Thermal regulation threshold."
+      conversion:
+        name: ThermalRegulationThreshold
+        Deg60: { value: 0b00, description: "60degC" }
+        Deg80: { value: 0b01, description: "80degC" }
+        Deg100: { value: 0b10, description: "100degC" }
+        Deg120: { value: 0b11, description: "120degC" }
+
+ChargerTimeout:
+  # REG67H - chg_tmr_cfg
+  type: register
+  address: 0x67
+  size_bits: 8
+  access: RW
+  description: "Charger timeout setting and control."
+  fields:
+    tmr_dt_en:
+      base: bool
+      start: 7
+      description: "safety timer 1/2 setting during DPM or thermal regulation (0: normal, 1: slowed)."
+    chg_tmr2_en:
+      base: bool
+      start: 6
+      description: "charge done safe timer enable (true: enable, false: disable)."
+    chg_tmr2_cfg:
+      base: uint
+      start: 4
+      end: 6 # 2 bits
+      description: "charge done safety timer config."
+      conversion:
+        name: ChargeDoneSafetyTimer
+        H5: { value: 0b00, description: "5 hours" }
+        H8: { value: 0b01, description: "8 hours" }
+        H12: { value: 0b10, description: "12 hours" }
+        H20: { value: 0b11, description: "20 hours" }
+    chg_tmr1_en:
+      base: bool
+      start: 2
+      description: "pre-charge safe timer enable (true: enable, false: disable)."
+    chg_tmr1_cfg:
+      base: uint
+      start: 0
+      end: 2 # 2 bits
+      description: "pre-charge safe timer config."
+      conversion:
+        name: PrechargeSafetyTimer
+        Min40: { value: 0b00, description: "40 mins" }
+        Min50: { value: 0b01, description: "50 mins" }
+        Min60: { value: 0b10, description: "60 mins" }
+        Min70: { value: 0b11, description: "70 mins" }
+
+BatteryDetectionControl:
+  # REG68H - bat_det
+  type: register
+  address: 0x68
+  size_bits: 8
+  access: RW
+  description: "Battery detection control."
+  fields:
+    bat_det_en:
+      base: bool
+      start: 0
+      description: "battery detection enable (true: enable, false: disable)."
+
+ChgLedControl:
+  # REG69H - chgled_cfg
+  type: register
+  address: 0x69
+  size_bits: 8
+  access: RW
+  description: "CHGLED setting and control."
+  fields:
+    chgled_out_ctrl:
+      base: uint
+      start: 4
+      end: 6 # 2 bits
+      description: "CHGLED pin output control when chgled_func is 10b."
+    chgled_func:
+      base: uint
+      start: 1
+      end: 3 # 2 bits
+      description: "CHGLED pin display function config."
+    chgled_en:
+      base: bool
+      start: 0
+      description: "CHGLED pin enable (true: enable, false: disable)."
+
+ButtonBatteryCharge:
+  # REG6AH - btn_chg_cfg
+  type: register
+  address: 0x6a
+  size_bits: 8
+  access: RW
+  description: "Button battery charge termination voltage setting."
+  fields:
+    btn_chg_cfg:
+      base: uint
+      start: 0
+      end: 3 # 3 bits
+      description: "Button Battery charge termination voltage (2.6V + N*0.1V)."
+      conversion:
+        name: ButtonBatteryChargeVoltage
+        V2_6: { value: 0b000, description: "2.6V" }
+        V2_7: { value: 0b001, description: "2.7V" }
+        V2_8: { value: 0b010, description: "2.8V" }
+        V2_9: { value: 0b011, description: "2.9V" }
+        V3_0: { value: 0b100, description: "3.0V" }
+        V3_1: { value: 0b101, description: "3.1V" }
+        V3_2: { value: 0b110, description: "3.2V" }
+        V3_3: { value: 0b111, description: "3.3V" }

@@ -1,6 +1,6 @@
 use super::{I2c, RegisterInterface, bisync, only_async, only_sync};
 use crate::{AXP2101_I2C_ADDRESS, AxpError, AxpInterface, AxpLowLevel, DcId, LdoId};
-use crate::{BatteryCurrentDirection, FastChargeCurrentLimit, ChargeVoltageLimit};
+use crate::{BatteryCurrentDirection, ChargeVoltageLimit, FastChargeCurrentLimit};
 
 #[bisync]
 impl<I2CBus, E> RegisterInterface for AxpInterface<I2CBus>
@@ -85,7 +85,7 @@ where
         // Read 16-bit battery voltage ADC register
         let mut op = self.ll.battery_voltage_adc();
         let adc_data = read_internal(&mut op).await?;
-        
+
         // Extract 14-bit value from 16-bit register
         let adc_value = adc_data.raw_value();
         // AXP2101 battery voltage ADC: 14-bit, LSB = 1mV
@@ -97,10 +97,10 @@ where
         // Read 16-bit VBUS voltage ADC register
         let mut op = self.ll.vbus_voltage_adc();
         let adc_data = read_internal(&mut op).await?;
-        
+
         // Extract 14-bit value from 16-bit register
         let adc_value = adc_data.raw_value();
-        // AXP2101 VBUS voltage ADC: 14-bit, LSB = 1mV  
+        // AXP2101 VBUS voltage ADC: 14-bit, LSB = 1mV
         Ok(adc_value as f32)
     }
 
@@ -109,7 +109,7 @@ where
         // Read 16-bit internal temperature ADC register
         let mut op = self.ll.internal_temperature_adc();
         let adc_data = read_internal(&mut op).await?;
-        
+
         // Extract 14-bit value from 16-bit register
         let adc_value = adc_data.raw_value();
         // AXP2101 temperature ADC conversion to Celsius
@@ -124,21 +124,10 @@ where
     ) -> Result<(), AxpError<I2CBusErr>> {
         let mut op = self.ll.dcdc_config_0();
         match dc {
-            DcId::Dcdc1 => {
-                modify_internal(&mut op, |r| r.set_dcdc1_enable(enable)).await
-            }
-            DcId::Dcdc2 => {
-                modify_internal(&mut op, |r| r.set_dcdc2_enable(enable)).await
-            }
-            DcId::Dcdc3 => {
-                modify_internal(&mut op, |r| r.set_dcdc3_enable(enable)).await
-            }
-            DcId::Dcdc4 => {
-                modify_internal(&mut op, |r| r.set_dcdc4_enable(enable)).await
-            }
-            DcId::Dcdc5 => {
-                modify_internal(&mut op, |r| r.set_dcdc5_enable(enable)).await
-            }
+            DcId::Dcdc1 => modify_internal(&mut op, |r| r.set_dcdc1_enable(enable)).await,
+            DcId::Dcdc2 => modify_internal(&mut op, |r| r.set_dcdc2_enable(enable)).await,
+            DcId::Dcdc3 => modify_internal(&mut op, |r| r.set_dcdc3_enable(enable)).await,
+            DcId::Dcdc4 => modify_internal(&mut op, |r| r.set_dcdc4_enable(enable)).await,
         }
     }
 
@@ -180,9 +169,6 @@ where
                     return Err(AxpError::InvalidVoltage(voltage_mv));
                 }
             }
-            DcId::Dcdc5 => {
-                return Err(AxpError::NotSupported("DCDC5 not available on AXP2101"));
-            }
         };
 
         match dc {
@@ -202,9 +188,6 @@ where
                 let mut op = self.ll.dcdc_4_voltage_config();
                 modify_internal(&mut op, |r| r.set_voltage_setting(voltage_val)).await
             }
-            DcId::Dcdc5 => {
-                Err(AxpError::NotSupported("DCDC5 not available on AXP2101"))
-            }
         }
     }
 
@@ -218,7 +201,7 @@ where
             LdoId::Dldo2 => {
                 // DLDO2 might be on a different register - need to check
                 Err(AxpError::NotSupported("DLDO2 enable not implemented yet"))
-            },
+            }
             _ => {
                 let mut op = self.ll.ldo_enable_config_0();
                 modify_internal(&mut op, |r| match ldo {
@@ -231,7 +214,8 @@ where
                     LdoId::Dldo1 => r.set_dldo1_enable(enable),
                     LdoId::Cpusldo => r.set_cpusldo_enable(enable),
                     LdoId::Dldo2 => unreachable!(), // Already handled above
-                }).await
+                })
+                .await
             }
         }
     }
@@ -244,7 +228,9 @@ where
     ) -> Result<(), AxpError<I2CBusErr>> {
         // TODO: LDO voltage control registers not yet implemented in device.yaml
         // Need to add voltage configuration registers for each LDO
-        Err(AxpError::NotSupported("LDO voltage control not implemented yet"))
+        Err(AxpError::NotSupported(
+            "LDO voltage control not implemented yet",
+        ))
     }
 
     #[bisync]
@@ -284,10 +270,12 @@ where
     }
 
     #[bisync]
-    pub async fn get_power_status(&mut self) -> Result<(bool, bool, bool, bool), AxpError<I2CBusErr>> {
+    pub async fn get_power_status(
+        &mut self,
+    ) -> Result<(bool, bool, bool, bool), AxpError<I2CBusErr>> {
         let mut op = self.ll.power_status();
         let status = read_internal(&mut op).await?;
-        
+
         Ok((
             status.vbus_good(),
             status.batfet_state(),
@@ -301,15 +289,18 @@ where
         // Get battery present from power status
         let mut op1 = self.ll.power_status();
         let power_status = read_internal(&mut op1).await?;
-        
-        // Get charging status from system status  
+
+        // Get charging status from system status
         let mut op2 = self.ll.system_status();
         let system_status = read_internal(&mut op2).await?;
-        
+
         Ok((
             power_status.battery_present(),
             // Check if currently charging (not standby, not discharging)
-            matches!(system_status.battery_current_direction(), BatteryCurrentDirection::Charging),
+            matches!(
+                system_status.battery_current_direction(),
+                BatteryCurrentDirection::Charging
+            ),
         ))
     }
 
@@ -320,7 +311,9 @@ where
     ) -> Result<(), AxpError<I2CBusErr>> {
         // TODO: ADC channel enable registers not yet implemented in device.yaml
         // Need to add ADC enable control registers
-        Err(AxpError::NotSupported("ADC channel enable not implemented yet"))
+        Err(AxpError::NotSupported(
+            "ADC channel enable not implemented yet",
+        ))
     }
 
     #[bisync]
@@ -340,7 +333,8 @@ where
             r.set_battery_charge_under_temp_irq_enable(irq0_mask & 0x04 != 0);
             r.set_battery_work_over_temp_irq_enable(irq0_mask & 0x02 != 0);
             r.set_battery_work_under_temp_irq_enable(irq0_mask & 0x01 != 0);
-        }).await?;
+        })
+        .await?;
 
         // Enable IRQ1 register interrupts (VBUS/power key related)
         let mut op1 = self.ll.irq_enable_1();
@@ -353,24 +347,25 @@ where
             r.set_power_key_long_press_irq_enable(irq1_mask & 0x04 != 0);
             r.set_power_key_negative_edge_irq_enable(irq1_mask & 0x02 != 0);
             r.set_power_key_positive_edge_irq_enable(irq1_mask & 0x01 != 0);
-        }).await
+        })
+        .await
     }
 
     #[bisync]
     pub async fn get_interrupt_status(&mut self) -> Result<(u8,), AxpError<I2CBusErr>> {
-        // Read IRQ status register 0 
+        // Read IRQ status register 0
         let mut op0 = self.ll.irq_status_0();
         let status0 = read_internal(&mut op0).await?;
-        
-        let irq0 = (status0.soc_warning_level2_irq() as u8) << 7 |
-                   (status0.soc_warning_level1_irq() as u8) << 6 |
-                   (status0.gauge_watchdog_timeout_irq() as u8) << 5 |
-                   (status0.new_soc_irq() as u8) << 4 |
-                   (status0.battery_charge_over_temp_irq() as u8) << 3 |
-                   (status0.battery_charge_under_temp_irq() as u8) << 2 |
-                   (status0.battery_work_over_temp_irq() as u8) << 1 |
-                   (status0.battery_work_under_temp_irq() as u8);
-        
+
+        let irq0 = (status0.soc_warning_level2_irq() as u8) << 7
+            | (status0.soc_warning_level1_irq() as u8) << 6
+            | (status0.gauge_watchdog_timeout_irq() as u8) << 5
+            | (status0.new_soc_irq() as u8) << 4
+            | (status0.battery_charge_over_temp_irq() as u8) << 3
+            | (status0.battery_charge_under_temp_irq() as u8) << 2
+            | (status0.battery_work_over_temp_irq() as u8) << 1
+            | (status0.battery_work_under_temp_irq() as u8);
+
         Ok((irq0,))
     }
 
@@ -387,6 +382,7 @@ where
             r.set_battery_charge_under_temp_irq(true);
             r.set_battery_work_over_temp_irq(true);
             r.set_battery_work_under_temp_irq(true);
-        }).await
+        })
+        .await
     }
 }
