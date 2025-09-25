@@ -85,6 +85,7 @@ pub enum DcId {
     Dcdc2,
     Dcdc3,
     Dcdc4,
+    Dcdc5,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
