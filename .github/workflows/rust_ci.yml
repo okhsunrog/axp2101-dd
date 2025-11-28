@@ -1,0 +1,41 @@
+name: Continuous Integration
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-checks:
+    name: Rust Checks
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        action:
+          - command: build
+            args: --release --example test_pmic_async --features defmt
+          - command: build
+            args: --release --example test_pmic_blocking --features defmt
+
+          - command: fmt
+            args: --all -- --check
+          - command: clippy
+            args: -- -D warnings
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          target: riscv32imc-unknown-none-elf
+          toolchain: stable
+          components: rust-src, rustfmt, clippy
+      - name: Enable caching
+        uses: Swatinem/rust-cache@v2
+      - name: Run command
+        run: cargo ${{ matrix.action.command }} ${{ matrix.action.args }}

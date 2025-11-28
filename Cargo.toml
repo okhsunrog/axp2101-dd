@@ -39,6 +39,12 @@ defmt = "1.0"
 defmt-rtt = "1.0"
 
 
+[[example]]
+name = "test_pmic_async"
+
+[[example]]
+name = "test_pmic_blocking"
+
 [lib]
 test = false
 bench = false
