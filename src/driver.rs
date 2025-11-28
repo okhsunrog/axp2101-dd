@@ -504,10 +504,7 @@ where
     }
 
     #[bisync]
-    pub async fn enable_interrupts2(
-        &mut self,
-        irq2_mask: u8,
-    ) -> Result<(), AxpError<I2CBusErr>> {
+    pub async fn enable_interrupts2(&mut self, irq2_mask: u8) -> Result<(), AxpError<I2CBusErr>> {
         let mut op2 = self.ll.irq_enable_2();
         write_internal(&mut op2, |r| {
             r.set_wdexp_irq_en(irq2_mask & 0x80 != 0);

@@ -2,7 +2,7 @@
 /// AXP2101 ADC format:
 /// - High byte: bits [5:0] contain ADC[13:8]
 /// - Low byte: bits [7:0] contain ADC[7:0]
-/// Returns a 14-bit value (0-16383).
+///   Returns a 14-bit value (0-16383).
 #[inline]
 pub(crate) fn adc_14bit_combine(high_6bit: u8, low_8bit: u8) -> u16 {
     ((high_6bit as u16) << 8) | (low_8bit as u16)
