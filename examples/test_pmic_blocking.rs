@@ -3,24 +3,23 @@
 
 use axp2101_dd::{AdcChannel, Axp2101, AxpError, DcId, LdoId};
 use defmt::info;
-use defmt_rtt as _;
-use esp_hal::Blocking;
 use esp_hal::{
+    Blocking,
     delay::Delay,
     i2c::master::{Config as I2cConfig, Error as I2cError, I2c},
-    main,
     time::Rate,
 };
+use panic_rtt_target as _;
+use rtt_target::rtt_init_defmt;
 
-#[panic_handler]
-fn panic(_: &core::panic::PanicInfo) -> ! {
-    loop {}
-}
+esp_bootloader_esp_idf::esp_app_desc!();
 
-#[main]
+#[esp_hal::main]
 fn main() -> ! {
-    let config = esp_hal::Config::default();
-    let p = esp_hal::init(config);
+    rtt_init_defmt!();
+    info!("Init!");
+
+    let p = esp_hal::init(esp_hal::Config::default());
     let config: I2cConfig = I2cConfig::default().with_frequency(Rate::from_khz(400));
     let i2c = I2c::new(p.I2C0, config)
         .unwrap()

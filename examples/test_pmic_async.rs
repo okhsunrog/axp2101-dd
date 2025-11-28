@@ -3,29 +3,30 @@
 
 use axp2101_dd::{AdcChannel, Axp2101Async, AxpError, DcId, LdoId};
 use defmt::info;
-use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_time::{Duration, Timer};
-use esp_hal::Async;
-use esp_hal::timer::timg::TimerGroup;
 use esp_hal::{
+    Async,
     i2c::master::{Config as I2cConfig, Error as I2cError, I2c},
+    interrupt::software::SoftwareInterruptControl,
     time::Rate,
+    timer::timg::TimerGroup,
 };
+use panic_rtt_target as _;
+use rtt_target::rtt_init_defmt;
 
-#[panic_handler]
-fn panic(_: &core::panic::PanicInfo) -> ! {
-    loop {}
-}
+esp_bootloader_esp_idf::esp_app_desc!();
 
-#[esp_hal_embassy::main]
+#[esp_rtos::main]
 async fn main(_spawner: Spawner) {
-    let config = esp_hal::Config::default();
-    let p = esp_hal::init(config);
+    rtt_init_defmt!();
+    info!("Init!");
 
-    let timer0 = TimerGroup::new(p.TIMG0);
-    esp_hal_embassy::init(timer0.timer0);
-    info!("Embassy initialized!");
+    let p = esp_hal::init(esp_hal::Config::default());
+
+    let timg0 = TimerGroup::new(p.TIMG0);
+    let sw_ints = SoftwareInterruptControl::new(p.SW_INTERRUPT);
+    esp_rtos::start(timg0.timer0, sw_ints.software_interrupt0);
 
     let config: I2cConfig = I2cConfig::default().with_frequency(Rate::from_khz(400));
     let i2c = I2c::new(p.I2C0, config)
