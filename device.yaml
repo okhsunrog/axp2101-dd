@@ -684,6 +684,11 @@ FastPowerOnConfig1:
       start: 2
       end: 4 # 2 bits
       description: "ALDO1 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
+    dcdc5_fstart_seq:
+      base: uint
+      start: 0
+      end: 2 # 2 bits
+      description: "DCDC5 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable)."
 
 FastPowerOnConfig2:
   # REG2AH - fast_pwron_cfg2
@@ -905,6 +910,28 @@ LowBatteryWarningThreshold:
       start: 0
       end: 4 # 4 bits
       description: "Low battery shutdown threshold 0-15%, 1% per step."
+
+RechargeConfig:
+  # REG60H - chg_cfg
+  type: register
+  address: 0x60
+  size_bits: 8
+  access: RW
+  reset_value: 0x2 # vrechg_rechg_en=1, gauge_rechg_en=0
+  description: |
+    Recharge configuration register controlling automatic recharge behavior
+    based on battery voltage or fuel gauge SOC level.
+  fields:
+    # Bits 7-2 are reserved
+    voltage_recharge_enable:
+      base: bool
+      start: 1
+      description: "Recharge with Battery Voltage below Vrechg enable (true: enable, false: disable)."
+
+    gauge_recharge_enable:
+      base: bool
+      start: 0
+      description: "Recharge with Egauge SOC Level enable (true: enable, false: disable)."
 
 PrechargeCurrentConfig:
   # REG61H - iprechg_cfg
@@ -1337,6 +1364,7 @@ LdoEnableConfig1:
 
 Aldo1VoltageConfig:
   # REG92H - aldo1_cfg
+  # Base register for LDO voltage configs with 0.5-3.5V range, 100mV/step
   type: register
   address: 0x92
   size_bits: 8
@@ -1350,71 +1378,52 @@ Aldo1VoltageConfig:
 
 Aldo2VoltageConfig:
   # REG93H - aldo2_cfg
-  type: register
-  address: 0x93
-  size_bits: 8
-  access: RW
+  type: ref
+  target: Aldo1VoltageConfig
   description: "ALDO2 output voltage config (0.5-3.5V, 100mV/step)."
-  fields:
-    voltage_setting:
-      base: uint
-      start: 0
-      end: 5 # 5 bits
+  override:
+    type: register
+    address: 0x93
 
 Aldo3VoltageConfig:
   # REG94H - aldo3_cfg
-  type: register
-  address: 0x94
-  size_bits: 8
-  access: RW
+  type: ref
+  target: Aldo1VoltageConfig
   description: "ALDO3 output voltage config (0.5-3.5V, 100mV/step)."
-  fields:
-    voltage_setting:
-      base: uint
-      start: 0
-      end: 5 # 5 bits
+  override:
+    type: register
+    address: 0x94
 
 Aldo4VoltageConfig:
   # REG95H - aldo4_cfg
-  type: register
-  address: 0x95
-  size_bits: 8
-  access: RW
+  type: ref
+  target: Aldo1VoltageConfig
   description: "ALDO4 output voltage config (0.5-3.5V, 100mV/step)."
-  fields:
-    voltage_setting:
-      base: uint
-      start: 0
-      end: 5 # 5 bits
+  override:
+    type: register
+    address: 0x95
 
 Bldo1VoltageConfig:
   # REG96H - bldo1_cfg
-  type: register
-  address: 0x96
-  size_bits: 8
-  access: RW
+  type: ref
+  target: Aldo1VoltageConfig
   description: "BLDO1 output voltage config (0.5-3.5V, 100mV/step)."
-  fields:
-    voltage_setting:
-      base: uint
-      start: 0
-      end: 5 # 5 bits
+  override:
+    type: register
+    address: 0x96
 
 Bldo2VoltageConfig:
   # REG97H - bldo2_cfg
-  type: register
-  address: 0x97
-  size_bits: 8
-  access: RW
+  type: ref
+  target: Aldo1VoltageConfig
   description: "BLDO2 output voltage config (0.5-3.5V, 100mV/step)."
-  fields:
-    voltage_setting:
-      base: uint
-      start: 0
-      end: 5 # 5 bits
+  override:
+    type: register
+    address: 0x97
 
 CpuSldoVoltageConfig:
   # REG98H - cpusldo_cfg
+  # Base register for LDO voltage configs with 0.5-1.4V range, 50mV/step
   type: register
   address: 0x98
   size_bits: 8
@@ -1428,29 +1437,21 @@ CpuSldoVoltageConfig:
 
 Dldo1VoltageConfig:
   # REG99H - dldo1_cfg
-  type: register
-  address: 0x99
-  size_bits: 8
-  access: RW
+  type: ref
+  target: Aldo1VoltageConfig
   description: "DLDO1 output voltage config (0.5-3.5V, 100mV/step)."
-  fields:
-    voltage_setting:
-      base: uint
-      start: 0
-      end: 5 # 5 bits
+  override:
+    type: register
+    address: 0x99
 
 Dldo2VoltageConfig:
   # REG9AH - dldo2_cfg
-  type: register
-  address: 0x9a
-  size_bits: 8
-  access: RW
+  type: ref
+  target: CpuSldoVoltageConfig
   description: "DLDO2 output voltage config (0.5-1.4V, 50mV/step)."
-  fields:
-    voltage_setting:
-      base: uint
-      start: 0
-      end: 5 # 5 bits
+  override:
+    type: register
+    address: 0x9a
 
 # =============================================================================
 # ADC DATA REGISTERS (Read-only, 14-bit values)
@@ -1478,6 +1479,7 @@ BatteryVoltageAdcHigh:
 
 BatteryVoltageAdcLow:
   # REG35H
+  # Base register for ADC low byte (8-bit value)
   type: register
   address: 0x35
   size_bits: 8
@@ -1515,20 +1517,16 @@ TsPinAdcHigh:
 
 TsPinAdcLow:
   # REG37H
-  type: register
-  address: 0x37
-  size_bits: 8
-  access: RO
+  type: ref
+  target: BatteryVoltageAdcLow
   description: "Low byte of TS Pin ADC."
-  fields:
-    value:
-      base: uint
-      start: 0
-      end: 8
-      description: "TS pin ADC data bits [7:0]."
+  override:
+    type: register
+    address: 0x37
 
 VbusVoltageAdcHigh:
   # REG38H
+  # Base register for simple ADC high byte (6-bit value only, bits 7-6 reserved)
   type: register
   address: 0x38
   size_bits: 8
@@ -1544,104 +1542,66 @@ VbusVoltageAdcHigh:
 
 VbusVoltageAdcLow:
   # REG39H
-  type: register
-  address: 0x39
-  size_bits: 8
-  access: RO
+  type: ref
+  target: BatteryVoltageAdcLow
   description: "Low byte of VBUS Voltage ADC."
-  fields:
-    value:
-      base: uint
-      start: 0
-      end: 8
-      description: "VBUS voltage ADC data bits [7:0]."
+  override:
+    type: register
+    address: 0x39
 
 VsysVoltageAdcHigh:
   # REG3AH
-  type: register
-  address: 0x3a
-  size_bits: 8
-  access: RO
+  type: ref
+  target: VbusVoltageAdcHigh
   description: "High byte of VSYS Voltage ADC."
-  fields:
-    # Bits 7-6 are reserved
-    value:
-      base: uint
-      start: 0
-      end: 6 # 6 bits
-      description: "VSYS voltage ADC data bits [13:8]."
+  override:
+    type: register
+    address: 0x3a
 
 VsysVoltageAdcLow:
   # REG3BH
-  type: register
-  address: 0x3b
-  size_bits: 8
-  access: RO
+  type: ref
+  target: BatteryVoltageAdcLow
   description: "Low byte of VSYS Voltage ADC."
-  fields:
-    value:
-      base: uint
-      start: 0
-      end: 8
-      description: "VSYS voltage ADC data bits [7:0]."
+  override:
+    type: register
+    address: 0x3b
 
 InternalTemperatureAdcHigh:
   # REG3CH
-  type: register
-  address: 0x3c
-  size_bits: 8
-  access: RO
+  type: ref
+  target: VbusVoltageAdcHigh
   description: "High byte of Internal Temperature ADC."
-  fields:
-    # Bits 7-6 are reserved
-    value:
-      base: uint
-      start: 0
-      end: 6 # 6 bits
-      description: "Internal temperature ADC data bits [13:8]."
+  override:
+    type: register
+    address: 0x3c
 
 InternalTemperatureAdcLow:
   # REG3DH
-  type: register
-  address: 0x3d
-  size_bits: 8
-  access: RO
+  type: ref
+  target: BatteryVoltageAdcLow
   description: "Low byte of Internal Temperature ADC."
-  fields:
-    value:
-      base: uint
-      start: 0
-      end: 8
-      description: "Internal temperature ADC data bits [7:0]."
+  override:
+    type: register
+    address: 0x3d
 
 GpadcAdcHigh:
   # REG3EH
-  type: register
-  address: 0x3e
-  size_bits: 8
-  access: RO
+  type: ref
+  target: VbusVoltageAdcHigh
   description: "High byte of General Purpose ADC."
-  fields:
-    # Bits 7-6 are reserved
-    value:
-      base: uint
-      start: 0
-      end: 6 # 6 bits
-      description: "GPADC data bits [13:8]."
+  override:
+    type: register
+    address: 0x3e
 
 GpadcAdcLow:
   # REG3FH
-  type: register
-  address: 0x3f
-  size_bits: 8
-  access: RO
+  type: ref
+  target: BatteryVoltageAdcLow
   description: "Low byte of General Purpose ADC."
-  fields:
-    value:
-      base: uint
-      start: 0
-      end: 8
-      description: "GPADC data bits [7:0]."
+  override:
+    type: register
+    address: 0x3f
 
 # =============================================================================
 # INTERRUPT CONTROL REGISTERS

@@ -1,5 +1,6 @@
 use super::{I2c, RegisterInterface, bisync, only_async, only_sync};
-use crate::{AXP2101_I2C_ADDRESS, AxpError, AxpInterface, AxpLowLevel, DcId, LdoId};
+use crate::adc_helpers::*;
+use crate::{AXP2101_I2C_ADDRESS, AdcChannel, AxpError, AxpInterface, AxpLowLevel, DcId, LdoId};
 use crate::{BatteryCurrentDirection, ChargeVoltageLimit, FastChargeCurrentLimit};
 
 #[bisync]
@@ -81,48 +82,68 @@ where
     I2CBusErr: core::fmt::Debug,
 {
     #[bisync]
-    pub async fn get_battery_voltage_mv(&mut self) -> Result<f32, AxpError<I2CBusErr>> {
-        // Read high and low byte of battery voltage ADC
+    pub async fn get_battery_voltage_mv(&mut self) -> Result<u16, AxpError<I2CBusErr>> {
         let mut op_high = self.ll.battery_voltage_adc_high();
         let high_byte = read_internal(&mut op_high).await?;
         let mut op_low = self.ll.battery_voltage_adc_low();
         let low_byte = read_internal(&mut op_low).await?;
 
-        // Combine high and low bytes to form 14-bit value
-        let adc_value = ((high_byte.value() as u16) << 8) | (low_byte.value() as u16);
-
-        // AXP2101 battery voltage ADC: 14-bit, LSB = 1mV
-        Ok(adc_value as f32)
+        let adc_value = adc_14bit_combine(high_byte.value(), low_byte.value());
+        Ok(battery_voltage_to_mv(adc_value))
     }
 
     #[bisync]
-    pub async fn get_vbus_voltage_mv(&mut self) -> Result<f32, AxpError<I2CBusErr>> {
-        // Read high and low byte of VBUS voltage ADC
+    pub async fn get_vbus_voltage_mv(&mut self) -> Result<u16, AxpError<I2CBusErr>> {
         let mut op_high = self.ll.vbus_voltage_adc_high();
         let high_byte = read_internal(&mut op_high).await?;
         let mut op_low = self.ll.vbus_voltage_adc_low();
         let low_byte = read_internal(&mut op_low).await?;
 
-        // Combine high and low bytes to form 14-bit value
-        let adc_value = ((high_byte.value() as u16) << 8) | (low_byte.value() as u16);
+        let adc_value = adc_14bit_combine(high_byte.value(), low_byte.value());
+        Ok(vbus_voltage_to_mv(adc_value))
+    }
 
-        // AXP2101 VBUS voltage ADC: 14-bit, LSB = 1mV
-        Ok(adc_value as f32)
+    #[bisync]
+    pub async fn get_vsys_voltage_mv(&mut self) -> Result<u16, AxpError<I2CBusErr>> {
+        let mut op_high = self.ll.vsys_voltage_adc_high();
+        let high_byte = read_internal(&mut op_high).await?;
+        let mut op_low = self.ll.vsys_voltage_adc_low();
+        let low_byte = read_internal(&mut op_low).await?;
+
+        let adc_value = adc_14bit_combine(high_byte.value(), low_byte.value());
+        Ok(vsys_voltage_to_mv(adc_value))
+    }
+
+    #[bisync]
+    pub async fn get_ts_pin_mv(&mut self) -> Result<f32, AxpError<I2CBusErr>> {
+        let mut op_high = self.ll.ts_pin_adc_high();
+        let high_byte = read_internal(&mut op_high).await?;
+        let mut op_low = self.ll.ts_pin_adc_low();
+        let low_byte = read_internal(&mut op_low).await?;
+
+        let adc_value = adc_14bit_combine(high_byte.value(), low_byte.value());
+        Ok(ts_pin_to_mv(adc_value))
     }
 
     #[bisync]
     pub async fn get_die_temperature_c(&mut self) -> Result<f32, AxpError<I2CBusErr>> {
-        // Read high and low byte of internal temperature ADC
         let mut op_high = self.ll.internal_temperature_adc_high();
         let high_byte = read_internal(&mut op_high).await?;
         let mut op_low = self.ll.internal_temperature_adc_low();
         let low_byte = read_internal(&mut op_low).await?;
 
-        // Combine high and low bytes to form 14-bit value
-        let adc_value = ((high_byte.value() as u16) << 8) | (low_byte.value() as u16);
+        let adc_value = adc_14bit_combine(high_byte.value(), low_byte.value());
+        Ok(die_temp_to_celsius(adc_value))
+    }
 
-        // AXP2101 temperature ADC conversion to Celsius
-        Ok(-144.7 + (adc_value as f32 * 0.1))
+    #[bisync]
+    pub async fn get_gpadc_value(&mut self) -> Result<u16, AxpError<I2CBusErr>> {
+        let mut op_high = self.ll.gpadc_adc_high();
+        let high_byte = read_internal(&mut op_high).await?;
+        let mut op_low = self.ll.gpadc_adc_low();
+        let low_byte = read_internal(&mut op_low).await?;
+
+        Ok(adc_14bit_combine(high_byte.value(), low_byte.value()))
     }
 
     #[bisync]
@@ -394,6 +415,42 @@ where
         ))
     }
 
+    /// Enable or disable a specific ADC channel
+    #[bisync]
+    pub async fn set_adc_channel_enable(
+        &mut self,
+        channel: AdcChannel,
+        enable: bool,
+    ) -> Result<(), AxpError<I2CBusErr>> {
+        let mut op = self.ll.adc_channel_enable_0();
+        modify_internal(&mut op, |r| match channel {
+            AdcChannel::BatteryVoltage => r.set_vbat_ch_en(enable),
+            AdcChannel::TsPin => r.set_ts_ch_en(enable),
+            AdcChannel::VbusVoltage => r.set_vbus_ch_en(enable),
+            AdcChannel::VsysVoltage => r.set_vsys_ch_en(enable),
+            AdcChannel::DieTemperature => r.set_tdie_ch_en(enable),
+            AdcChannel::Gpadc => r.set_gpadc_ch_en(enable),
+        })
+        .await
+    }
+
+    /// Enable all ADC channels at once
+    #[bisync]
+    pub async fn enable_all_adc_channels(&mut self) -> Result<(), AxpError<I2CBusErr>> {
+        let mut op = self.ll.adc_channel_enable_0();
+        modify_internal(&mut op, |r| {
+            r.set_vbat_ch_en(true);
+            r.set_ts_ch_en(true);
+            r.set_vbus_ch_en(true);
+            r.set_vsys_ch_en(true);
+            r.set_tdie_ch_en(true);
+            r.set_gpadc_ch_en(true);
+        })
+        .await
+    }
+
+    /// Enable ADC channels using a bitmask (legacy API)
+    /// Bits: [5]=GPADC, [4]=TDIE, [3]=VSYS, [2]=VBUS, [1]=TS, [0]=VBAT
     #[bisync]
     pub async fn enable_adc_channel(
         &mut self,

@@ -1,26 +1,45 @@
-/// Helper to extract a 12-bit ADC value from a raw u16 read over two 8-bit registers.
-/// Assumes Big Endian read: raw_u16 = (MSB_register_byte << 8) | LSB_register_byte.
-/// MSB_register_byte contains ADC[11:4].
-/// LSB_register_byte contains ADC[3:0] in its lower nibble.
-pub(crate) fn adc_12bit_from_raw_u16(raw_be_u16: u16) -> u16 {
-    let msb_reg_val = (raw_be_u16 >> 8) as u8; // Content of the first physical register (e.g., 0x78)
-    let lsb_reg_val = (raw_be_u16 & 0xFF) as u8; // Content of the second physical register (e.g., 0x79)
-    ((msb_reg_val as u16) << 4) | ((lsb_reg_val & 0x0F) as u16)
+/// Helper to combine high and low bytes into a 14-bit ADC value.
+/// AXP2101 ADC format:
+/// - High byte: bits [5:0] contain ADC[13:8]
+/// - Low byte: bits [7:0] contain ADC[7:0]
+/// Returns a 14-bit value (0-16383).
+#[inline]
+pub(crate) fn adc_14bit_combine(high_6bit: u8, low_8bit: u8) -> u16 {
+    ((high_6bit as u16) << 8) | (low_8bit as u16)
 }
 
-/// Helper to extract a 13-bit ADC value from a raw u16 read over two 8-bit registers.
-/// Assumes Big Endian read: raw_u16 = (MSB_register_byte << 8) | LSB_register_byte.
-/// MSB_register_byte contains ADC[12:5].
-/// LSB_register_byte contains ADC[4:0] in its bits 4:0.
-pub(crate) fn adc_13bit_from_raw_u16(raw_be_u16: u16) -> u16 {
-    let msb_reg_val = (raw_be_u16 >> 8) as u8; // Content of the first physical register (e.g., 0x7A)
-    let lsb_reg_val = (raw_be_u16 & 0xFF) as u8; // Content of the second physical register (e.g., 0x7B)
-    ((msb_reg_val as u16) << 5) | ((lsb_reg_val & 0x1F) as u16)
+/// Convert battery voltage ADC value to millivolts.
+/// AXP2101 battery voltage ADC: 14-bit, 1mV per LSB.
+#[inline]
+pub(crate) fn battery_voltage_to_mv(adc_value: u16) -> u16 {
+    adc_value
 }
 
-/// Helper to extract a 24-bit ADC value from a raw u32 read over three 8-bit registers.
-/// Assumes Big Endian read: raw_u32 = (MSB_reg << 16) | (MID_reg << 8) | LSB_reg.
-/// The device-driver field for a 24-bit uint will likely yield a u32 with data in lower 24 bits.
-pub(crate) fn adc_24bit_from_raw_u32(raw_be_u32: u32) -> u32 {
-    raw_be_u32 & 0x00FFFFFF // Ensure only the lower 24 bits are used
+/// Convert VBUS voltage ADC value to millivolts.
+/// AXP2101 VBUS voltage ADC: 14-bit, 1mV per LSB.
+#[inline]
+pub(crate) fn vbus_voltage_to_mv(adc_value: u16) -> u16 {
+    adc_value
+}
+
+/// Convert VSYS voltage ADC value to millivolts.
+/// AXP2101 VSYS voltage ADC: 14-bit, 1mV per LSB.
+#[inline]
+pub(crate) fn vsys_voltage_to_mv(adc_value: u16) -> u16 {
+    adc_value
+}
+
+/// Convert TS pin ADC value to millivolts.
+/// AXP2101 TS pin ADC: 14-bit, 0.5mV per LSB.
+#[inline]
+pub(crate) fn ts_pin_to_mv(adc_value: u16) -> f32 {
+    adc_value as f32 * 0.5
+}
+
+/// Convert internal temperature ADC value to degrees Celsius.
+/// AXP2101 die temperature formula: T = -144.7 + (adc_value * 0.1)
+/// LSB = 0.1°C, offset = -144.7°C
+#[inline]
+pub(crate) fn die_temp_to_celsius(adc_value: u16) -> f32 {
+    -144.7 + (adc_value as f32 * 0.1)
 }

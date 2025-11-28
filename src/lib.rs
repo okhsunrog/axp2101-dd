@@ -58,7 +58,7 @@
 
 #[macro_use]
 pub(crate) mod fmt;
-// mod adc_helpers;  // TODO: Re-enable when ADC functionality is implemented
+mod adc_helpers;
 
 use thiserror::Error;
 
@@ -100,6 +100,24 @@ pub enum LdoId {
     Dldo1,
     Dldo2,
     Cpusldo,
+}
+
+/// ADC channels available on AXP2101
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum AdcChannel {
+    /// Battery voltage measurement (VBAT)
+    BatteryVoltage,
+    /// TS pin measurement (temperature sensor)
+    TsPin,
+    /// VBUS voltage measurement
+    VbusVoltage,
+    /// System voltage measurement (VSYS)
+    VsysVoltage,
+    /// Die temperature measurement
+    DieTemperature,
+    /// General purpose ADC
+    Gpadc,
 }
 
 pub struct AxpInterface<I2CBus> {
