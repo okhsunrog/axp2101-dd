@@ -102,9 +102,107 @@ The `axp2101-dd` driver offers:
      let battery_mv = axp.get_battery_voltage_mv().await?;
      ```
 
+## Low-Level API Usage
+
+The driver provides direct access to all AXP2101 registers through the low-level API via `axp.ll`. This API is automatically generated from [`device.yaml`](device.yaml) and provides type-safe access to all register fields.
+
+### Reading Registers
+
+Use `.read()` to read a register and access its fields:
+
+```rust
+// Read battery percentage (State of Charge)
+let soc = axp.ll.battery_percentage().read()?;
+let percentage = soc.percentage();  // Returns 0-100%
+
+// Read power status
+let status = axp.ll.power_status().read()?;
+let battery_present = status.battery_present();
+let vbus_good = status.vbus_good();
+
+// Read chip ID and access individual fields
+let chip_id = axp.ll.chip_id().read()?;
+let id_high = chip_id.chip_id_high();     // Upper 2 bits
+let version = chip_id.chip_version();     // Version bits
+let id_low = chip_id.chip_id_low();       // Lower 4 bits
+```
+
+### Writing Registers
+
+Use `.write()` with a closure to modify register fields. The closure receives a mutable reference to the register structure:
+
+```rust
+// Enable battery detection
+axp.ll.battery_detection_control().write(|w| {
+    w.set_bat_det_en(true);
+})?;
+
+// Configure ADC channels
+axp.ll.adc_channel_enable_0().write(|w| {
+    w.set_vbat_ch_en(true);   // Battery voltage ADC
+    w.set_vbus_ch_en(true);   // VBUS voltage ADC
+    w.set_vsys_ch_en(true);   // System voltage ADC
+    w.set_tdie_ch_en(true);   // Die temperature ADC
+})?;
+
+// Configure common config register
+axp.ll.common_config().write(|w| {
+    w.set_discharge_off_enable(true);
+    w.set_pwrok_restart_enable(true);
+})?;
+```
+
+### Modifying Registers
+
+Use `.modify()` to read-modify-write, preserving other fields:
+
+```rust
+// Enable one ADC channel without affecting others
+// modify() reads the register, applies your changes, then writes it back
+axp.ll.adc_channel_enable_0().modify(|w| {
+    w.set_vbat_ch_en(true);  // Only modify this field, others preserved
+})?;
+```
+
+### Async Low-Level API
+
+The low-level API has async versions for use with `Axp2101Async`. Simply append `_async` to the method name:
+
+```rust
+// Async read
+let chip_id = axp.ll.chip_id().read_async().await?;
+let soc = axp.ll.battery_percentage().read_async().await?;
+
+// Async write
+axp.ll.battery_detection_control().write_async(|w| {
+    w.set_bat_det_en(true);
+}).await?;
+
+// Async modify
+axp.ll.adc_channel_enable_0().modify_async(|w| {
+    w.set_gpadc_ch_en(true);
+}).await?;
+```
+
+### Field Naming Convention
+
+Register and field names in the LL API follow snake_case and are derived from the names in [`device.yaml`](device.yaml):
+
+- Register: `BatteryDetectionControl` → `battery_detection_control()`
+- Field: `bat_det_en` → `set_bat_det_en()` / `bat_det_en()`
+- Register: `AdcChannelEnable0` → `adc_channel_enable_0()`
+- Field: `vbat_ch_en` → `set_vbat_ch_en()` / `vbat_ch_en()`
+
+### Finding Register/Field Names
+
+1. **Check [`device.yaml`](device.yaml)** - All registers and fields are documented there
+2. **Use IDE autocomplete** - Type `axp.ll.` to see all available registers
+3. **Read a register** - Use `.read()` then autocomplete to see available field getters
+4. **Write a register** - The closure parameter has autocomplete for all setters
+
 ## Examples
 
-Examples for ESP32-C3 using `esp-hal` are included. Setup is required (see [esp-hal docs](https://esp-rs.github.io/book/installation/)).
+Examples for ESP32-C3 using `esp-hal` are included. Setup is required (see [esp-hal docs](https://esp-rs.github.io/book/installation/)). Both examples demonstrate high-level convenience methods and low-level register API usage.
 
 - **Async Example:** [`examples/test_pmic_async.rs`](examples/test_pmic_async.rs)
   ```bash
