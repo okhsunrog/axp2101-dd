@@ -130,6 +130,9 @@ Access the low-level API via `axp.ll` (e.g., `axp.ll.power_status().read()`). Hi
 
 The AXP2101 is used in various embedded devices and development boards that require single-cell Li-battery power management with multiple voltage rails.
 
+Known devices using the AXP2101:
+- **M5Stack Core2 v1.1** - ESP32-based IoT development kit with touch screen
+
 ## Feature Flags
 
 - **`default = []`**: No default features; async and blocking drivers are always available.
