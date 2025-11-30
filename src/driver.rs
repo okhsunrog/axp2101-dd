@@ -586,4 +586,50 @@ where
         })
         .await
     }
+
+    // =========================================================================
+    // Convenience methods for common status queries
+    // =========================================================================
+
+    /// Get battery state of charge percentage (0-100%)
+    #[bisync]
+    pub async fn get_battery_level(&mut self) -> Result<u8, AxpError<I2CBusErr>> {
+        let mut op = self.ll.battery_percentage();
+        let data = read_internal(&mut op).await?;
+        Ok(data.percentage())
+    }
+
+    /// Check if the battery is currently charging
+    #[bisync]
+    pub async fn is_charging(&mut self) -> Result<bool, AxpError<I2CBusErr>> {
+        let mut op = self.ll.system_status();
+        let status = read_internal(&mut op).await?;
+        Ok(matches!(
+            status.battery_current_direction(),
+            BatteryCurrentDirection::Charging
+        ))
+    }
+
+    /// Check if a battery is present
+    #[bisync]
+    pub async fn is_battery_present(&mut self) -> Result<bool, AxpError<I2CBusErr>> {
+        let mut op = self.ll.power_status();
+        let status = read_internal(&mut op).await?;
+        Ok(status.battery_present())
+    }
+
+    /// Check if VBUS power is good (USB/external power connected)
+    #[bisync]
+    pub async fn is_vbus_good(&mut self) -> Result<bool, AxpError<I2CBusErr>> {
+        let mut op = self.ll.power_status();
+        let status = read_internal(&mut op).await?;
+        Ok(status.vbus_good())
+    }
+
+    /// Trigger a soft power off
+    #[bisync]
+    pub async fn power_off(&mut self) -> Result<(), AxpError<I2CBusErr>> {
+        let mut op = self.ll.common_config();
+        modify_internal(&mut op, |r| r.set_soft_power_off(true)).await
+    }
 }

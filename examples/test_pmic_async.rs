@@ -74,7 +74,7 @@ async fn init_pmic(i2c: I2c<'_, Async>) -> Result<(), AxpError<I2cError>> {
     // Read chip ID using low-level API async
     let chip_id = axp.ll.chip_id().read_async().await?;
     info!("Chip ID high: {}, version: {}, low: {}",
-          chip_id.chip_id_high(), chip_id.chip_version(), chip_id.chip_id_low());
+          chip_id.chip_id_high(), chip_id.chip_version() as u8, chip_id.chip_id_low());
 
     // Read battery percentage (SoC) using low-level API
     let soc = axp.ll.battery_percentage().read_async().await?;
