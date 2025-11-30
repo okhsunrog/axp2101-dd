@@ -37,9 +37,10 @@ pub(crate) fn ts_pin_to_mv(adc_value: u16) -> f32 {
 }
 
 /// Convert internal temperature ADC value to degrees Celsius.
-/// AXP2101 die temperature formula: T = -144.7 + (adc_value * 0.1)
-/// LSB = 0.1°C, offset = -144.7°C
+/// AXP2101 die temperature formula (from M5Unified): T = 22 + ((7274 - adc) / 20)
+/// This can be expanded to: T = 385.7 - (adc * 0.05)
+/// Negative slope: temperature decreases as ADC value increases
 #[inline]
 pub(crate) fn die_temp_to_celsius(adc_value: u16) -> f32 {
-    -144.7 + (adc_value as f32 * 0.1)
+    22.0 + ((7274.0 - adc_value as f32) / 20.0)
 }
