@@ -43,7 +43,7 @@ where
 
 pub struct Axp2101<
     I2CImpl: RegisterInterface<AddressType = u8, Error = AxpError<I2CBusErr>>,
-    I2CBusErr: core::fmt::Debug = <I2CImpl as RegisterInterface>::Error,
+    I2CBusErr: core::fmt::Debug,
 > {
     pub ll: AxpLowLevel<I2CImpl>,
     _marker: core::marker::PhantomData<I2CBusErr>,
