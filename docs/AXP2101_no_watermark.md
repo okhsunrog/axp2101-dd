@@ -264,23 +264,23 @@ Note: "Host" here refers to system processor.
 
 ### 7.4 Power Path
 
-VBUS as the charger input, connecting to VSYS pin through a Linear charger, provides power to system and charges battery through BATFET. Charge current can be adjusted automatically according to the feedback current which is detected with an internal resistor. When system current(I $\left.{ }_{S Y S}\right)$ changes, the detected current will change, and then the current change signal will feed back to charge loop to adjust the charge current to the setting value.
+VBUS as the charger input, connecting to VSYS pin through a Linear charger, provides power to system and charges battery through BATFET. Charge current can be adjusted automatically according to the feedback current which is detected with an internal resistor. When system current(I $_{\text {sys }}$ ) changes, the detected current will change, and then the current change signal will feed back to charge loop to adjust the charge current to the setting value.
 
-When battery voltage is above $\mathrm{V}_{\text {SYS }}$, BATFET is turned on and PMU enters supplement mode. When in supplement mode, if the discharge current is lower than 1A, PMU controls the voltage $\left(V_{D S}\right)$ between system and battery and keeps $\mathrm{V}_{\mathrm{DS}}$ at 30 mV to avoid entering and exiting supplement mode repeatedly. As discharge current increases, PMU adjusts BATFET to be fully on and $\mathrm{V}_{\mathrm{DS}}$ increases linearly. If an adapter is not inserted, system current is provided only by battery. At this time, BATFET is at fully on state.
+When battery voltage is above $\mathrm{V}_{\text {sys, }}$ BATFET is turned on and PMU enters supplement mode. When in supplement mode, if the discharge current is lower than 1A, PMU controls the voltage $\left(V_{D S}\right)$ between system and battery and keeps $\mathrm{V}_{\mathrm{DS}}$ at 30 mV to avoid entering and exiting supplement mode repeatedly. As discharge current increases, PMU adjusts BATFET to be fully on and $\mathrm{V}_{\mathrm{DS}}$ increases linearly. If an adapter is not inserted, system current is provided only by battery. At this time, BATFET is at fully on state.
 
 ### 7.5 Power On/Off and reset
 
 ### 7.5.1 Power on reset(POR)
 
-AXP2101 is powered from the higher voltage between VBUS and BAT. When VBUS voltage $\left(V_{\text {vbus }}\right)$ is higher than $\mathrm{V}_{\text {vbus_UVLOZ }}$ or BAT voltage $\left(V_{B A T}\right)$ is higher than $\mathrm{V}_{\text {BAT_UVLOZ }}$, the sleep comparator, battery depletion comparator and BATFET driver are active. All registers are reset to the default value. TWSI communication is active and Host can communicate with PMU.
+AXP2101 is powered from the higher voltage between VBUS and BAT. When VBUS voltage $\left(V_{\text {vbus }}\right)$ is higher than $\mathrm{V}_{\text {vbus_uvloz }}$ or BAT voltage $\left(V_{B A T}\right)$ is higher than $\mathrm{V}_{\text {BAT_uvloz, }}$, the sleep comparator, battery depletion comparator and BATFET driver are active. All registers are reset to the default value. TWSI communication is active and Host can communicate with PMU.
 
 ### 7.5.2 Power up from BAT
 
-If only battery is present and $\mathrm{V}_{\text {BAT }}$ is higher than depletion threshold( $\mathrm{V}_{\mathrm{BAT} \text { DPLZ }}$ ), BATFET, connecting battery to system, is off by default and need to be turned on by pressing the PWRON key or inserting an adapter.
+If only battery is present and $\mathrm{V}_{\text {BAT }}$ is higher than depletion threshold( $\mathrm{V}_{\mathrm{BAT} \text { _DPL2 }}$ ), BATFET, connecting battery to system, is off by default and need to be turned on by pressing the PWRON key or inserting an adapter.
 
 ### 7.5.3 Power up from VBUS
 
-When VBUS is inserted, PMU detects the input voltage to start up the reference voltage and the bias circuit. When $\mathrm{V}_{\text {vbus }}$ is higher than $\mathrm{V}_{\text {vbus_uvloZ }}$, the VBUS insertion IRQ is sent and the register bit reg49H[7] is set to 1 to indicate VBUS is inserted. Then PMU detects the input source whether it is good or not. If Vbus is good, the RBFET is open and Vsys is working.
+When VBUS is inserted, PMU detects the input voltage to start up the reference voltage and the bias circuit. When $\mathrm{V}_{\text {vbus }}$ is higher than $\mathrm{V}_{\text {vbus_uvloz, }}$, the VBUS insertion IRQ is sent and the register bit reg49H[7] is set to 1 to indicate VBUS is inserted. Then PMU detects the input source whether it is good or not. If Vbus is good, the RBFET is open and Vsys is working.
 
 # Page 10
 
@@ -364,7 +364,7 @@ System reset means the registers will be reset when PMU is powered on. When at s
 The PWROK pin can be used as the reset signal of application system. During AXP2101 startup, PWROK outputs low level, which will be pulled up to startup the system after output voltage reaches the regulated value.
 
 When application system works normally, If the PWROK pin is driven low by external key or other reasons, the PMU will be restarted. The function can be configured by REG10H[3].
-(2). Write " 1 " to REG10H[1] to restart the PMU.
+(2).Write "1" to REG10H[1] to restart the PMU.
 (3).Watchdog timeout . The function can be configured by REG18[0] and REG19[5:4]
 
 - Power on reset
@@ -444,7 +444,7 @@ Table 7-1
 
 ### 7.7.3.1. Pre-charge
 
-When $\mathrm{V}_{\text {BAT }}$ is lower than $\mathrm{V}_{\text {BATLOWV }}(3 \mathrm{~V})$, the charger is under pre-charge mode where charging current is limited to a value of $\mathrm{I}_{\text {PRE-CHG }}$. Safety time is set through reg67H[1:0] and its default value is 50 minutes. If pre-charge process times out, PMU will stop charging and send a corresponding IRQ to Host. The function of safety timer can be disabled through reg67H[2].
+When $\mathrm{V}_{\text {BAT }}$ is lower than $\mathrm{V}_{\text {BATLOWV }}(3 \mathrm{~V})$, the charger is under pre-charge mode where charging current is limited to a value of $I_{\text {PRE-CHG }}$. Safety time is set through reg67H[1:0] and its default value is 50 minutes. If pre-charge process times out, PMU will stop charging and send a corresponding IRQ to Host. The function of safety timer can be disabled through reg67H[2].
 
 ### 7.7.3.2. Constant current charge
 
@@ -462,7 +462,7 @@ When AXP2101 is in regulation of input current, input voltage or temperature, th
 
 ### 7.7.3.4.Re-charge
 
-After charge done, if $\mathrm{V}_{\text {BAT }}$ falls below $\mathrm{V}_{\text {RECHG }}$, PMU will automatically enable charger without reinserting adapter. No matter whether $\mathrm{V}_{\mathrm{BAT}}$ is above $\mathrm{V}_{\text {RECHG }}$ or not, the charger is enabled when an adapter is inserted.
+After charge done, if $\mathrm{V}_{\text {BAT }}$ falls below $\mathrm{V}_{\text {RECHG }}$, PMU will automatically enable charger without reinserting adapter. No matter whether $\mathrm{V}_{\text {BAT }}$ is above $\mathrm{V}_{\text {RECHG }}$ or not, the charger is enabled when an adapter is inserted.
 
 ### 7.7.3.5.Battery detection
 
@@ -482,7 +482,7 @@ Timing speed of timer1 or timer2 is relevant with actual charge current. The sma
 
 In battery safe mode, the charger always charges with 10 mA current. PMU can quit battery safe mode with one of the following methods:
 
-- $\mathrm{V}_{\mathrm{BAT}}>\mathrm{V}_{\text {RECHG }}$
+- $\mathrm{V}_{\text {BAT }}>\mathrm{V}_{\text {RECHG }}$
 - Adapter removal
 - Charger enable bit(reg18H[1]) is reset to 1
 - Safety timer1 enable bit or safety timer2 enable bit is reset to 1
@@ -505,7 +505,7 @@ Table 7-2
 | :--: | :--: | :--: | :--: |
 | $-20^{\circ} \mathrm{C}$ | 63.00Kohm | 3.150 V | 189 Ch |
 | $-15^{\circ} \mathrm{C}$ | 50.15 Hohm | 2.508 V | 1398h |
-| $-10^{\circ} \mathrm{C}$ | 40.26Kohm | 2.013V | FBAh |
+| $-10^{\circ} \mathrm{C}$ | 40.26Kohm | 2.013 V | FBAh |
 | $-5^{\circ} \mathrm{C}$ | 32.55Kohm | 1.628 V | CB8h |
 | $0^{\circ} \mathrm{C}$ | 26.49Kohm | 1.325 V | A5Ah |
 | $5^{\circ} \mathrm{C}$ | 21.68Kohm | 1.084 V | 878h |
@@ -832,7 +832,7 @@ April 28, 2019
 | pwrok_chk_en | 4 | RW | 1b | POR | Check the PWROK Pin enable after all dcdc/1do output valid 128ms <br> 0 : disable <br> 1: enable |
 | pwroff_dly_en | 3 | RW | 1b | POR | POWEROFF Delay 4ms after PWROK disable <br> 0 : disable <br> 1: enable |
 | pwroff_seq_ctr1 | 2 | RW | 0b | POR | POWEROFF Sequence Control <br> 0 : At the same time <br> 1: the reverse of the Startup |
-| pwrok_dly | $1: 0$ | RW | EFUSE | POR | Delay of PWROK after all power output good 00: 8ms <br> 01: 16 ms <br> 10: 32 ms <br> 11: 64 ms |
+| pwrok_dly | $1: 0$ | RW | EFUSE | POR | Delay of PWROK after all power output good 00: 8ms <br> 01: 16ms <br> 10: 32ms <br> 11: 64ms |
 | sleep_cfg | $0 \times 26$ |  |  |  |  |
 | reserved | 7:5 | RO | 0 | $/$ |  |
 | irq_wakup_en | 4 | RW | 0b | POR | IRQ Pin low to Wakeup <br> 0 : disable <br> 1: enable |
@@ -849,7 +849,7 @@ April 28, 2019
 
 |  |  |  |  |  | $\begin{aligned} & 00: 4 \mathrm{~s} \\ & 01: 6 \mathrm{~s} \\ & 10: 8 \mathrm{~s} \\ & 11: 10 \mathrm{~s} \end{aligned}$ |
 | :--: | :--: | :--: | :--: | :--: | :--: |
-| on1eve1 | $1: 0$ | HW | EFUSE | POR | OSLEVEL config <br> 00: 128ms <br> 01: 512ms <br> 10: 1s <br> 11: 2s |
+| on1eve1 | $1: 0$ | HW | EFUSE | POR | OSLEVEL config <br> 00: 128 ms <br> 01: 512 ms <br> 10: 1 s <br> $11: 2 \mathrm{~s}$ |
 | fast_pwron_c fg0 | $0 \times 28$ |  |  |  |  |
 | dcdc4_fstart_se q | $7: 6$ | HW | 0b | POR | DCDC4 Fast Power On Start Sequence 00 10: Start Sequence Code 11: disable |
 | dcdc3_fstart_se <br> q | $5: 4$ | HW | 0b | POR | DCDC3 Fast Power On Start Sequence 00 10: Start Sequence Code 11: disable |
@@ -871,14 +871,14 @@ April, 28, 2019
 
 |  |  |  |  |  | 11: disable |
 | :--: | :--: | :--: | :--: | :--: | :--: |
-| b1do1_fstart_se q | $3: 2$ | RW | 0b | POR | BLDO1 Fast Power On Start Sequence $00^{\sim} 10$ : Start Sequence Code 11: disable |
-| aldo4_fstart_se <br> q | $1: 0$ | RW | 0b | POR | ALDO4 Fast Power On Start Sequence $00^{\sim} 10$ : Start Sequence Code 11: disable |
+| b1do1_fstart_se q | $3: 2$ | RW | 0b | POR | BLDO1 Fast Power On Start Sequence 00 10: Start Sequence Code 11: disable |
+| aldo4_fstart_se <br> q | $1: 0$ | RW | 0b | POR | ALDO4 Fast Power On Start Sequence 00 10: Start Sequence Code 11: disable |
 | fast_pwron_c fg3 | $0 \times 2 B$ |  |  |  |  |
 | fast_pwron_en | 7 | RW | 0b | POR | Fast Power On Enable <br> 0: disable <br> 1: enable |
 | fast_wakup_en | 6 | RW | 0b | POR | Fast Wake up Enable <br> 0: disable <br> 1: enable |
 | reserved | $5: 4$ | RO | 0b | / |  |
-| d1do2_fstart_se <br> q | $3: 2$ | RW | 0b | POR | DLDO2 Fast Power On Start Sequence $00^{\sim} 10$ : Start Sequence Code 11: disable |
-| d1do1_fstart_se <br> q | $1: 0$ | RW | 0b | POR | DLDO1 Fast Power On Start Sequence $00^{\sim} 10$ : Start Sequence Code 11: disable |
+| d1do2_fstart_se <br> q | $3: 2$ | RW | 0b | POR | DLDO2 Fast Power On Start Sequence 00 10: Start Sequence Code 11: disable |
+| d1do1_fstart_se <br> q | $1: 0$ | RW | 0b | POR | DLDO1 Fast Power On Start Sequence 00 10: Start Sequence Code 11: disable |
 | adc_ch_en0 | $0 \times 30$ |  |  |  |  |
 | reserved | $7: 6$ | RO | 0 | / |  |
 | gpadc_ch_en | 5 | RW | 0b | POR | general purpose ADC channel enable <br> 0: disable <br> 1: enable |
@@ -1012,24 +1012,24 @@ April 28, 2019
 AXP2101
 April 28, 2019
 
-| chgte_irq | 1 | RW1C | 0b | POR | 1: irq <br> DIE Temperature to normal to clear it <br> Charger Safety Timer1/2 expire IRQ <br> 0: no irq <br> 1: irq |
-| :--: | :--: | :--: | :--: | :--: | :--: |
-| bovp_irq | 0 | RW1C | 0b | POR | Battery Over Voltage Protection IRQ <br> 0: no irq <br> 1: irq <br> Battery Voltage to normal to clear it |
-| ts_cfg | $0 \times 50$ |  |  |  |  |
-| reserved | $7: 5$ | RO | 0 | / |  |
-| ts_func | 4 | RW | EFUSE | POR | TS PIN function select: <br> 0: TS pin is the battery temperature sensor input and will affect the charger <br> 1: TS pin is the external fixed input and doesn't affect the charger |
-| ts_src_en | $3: 2$ | RW | EFUSE | POR | TS current source on/off enable <br> 00: off <br> 01: on when TS channel of ADC is enabled <br> 10: on only when TS channel is working and off when others channel is working <br> 11: always on |
-| ts_curr | $1: 0$ | RW | 10b | POR | current source to TS pin config <br> 00: 20uA <br> 01: 40uA <br> 10: 50uA <br> 11: 60uA |
-| ts_hys12h | $0 \times 52$ |  |  |  |  |
-| ts_hys12h | $7: 0$ | RW | 2 h | POR | hysteresis for TS from low go to normal <br> Thys $=$ N $* 16 \mathrm{mV}$ (default 32 mV ) |
-| ts_hysh21 | $0 \times 53$ |  |  |  |  |
-| ts_hysh21 | $7: 0$ | RW | 1 h | POR | hysteresis for TS from high go to normal <br> Thys $=$ N $* 4 \mathrm{mV}$ (default 4 mV ) |
-| vltf_chg | $0 \times 54$ |  |  |  |  |
-| vltf_chg | $7: 0$ | RW | 29h | POR | VLTF in voltage of charge config <br> VLTF $=$ N $* 32 \mathrm{mV}$ (default is about 0deg) <br> This is also T1 of JEITA |
-| vhtf_chg | $0 \times 55$ |  |  |  |  |
-| vhtf_chg | $7: 0$ | RW | 58 h | POR | VHTF in voltage of charge config <br> VHTF $=$ N $* 2 \mathrm{mV}$ (default is about 55deg) <br> This is also T4 of JEITA |
-| vltf_work | $0 \times 56$ |  |  |  |  |
-| vltf_work | $7: 0$ | RW | 3Eh | POR | VLTF in voltage of work config <br> VLTF $=$ N $* 32 \mathrm{mV}$ (default is about -10 deg ) |
+| chgte_irq | chgte_irq | 1 | RW1C | 0b | POR | 1: irq <br> DIE Temperature to normal to clear it <br> Charger Safety Timer1/2 expire IRQ <br> 0: no irq <br> 1: irq |
+| :--: | :--: | :--: | :--: | :--: | :--: | :--: |
+| bovp_irq |  | 0 | RW1C | 0b | POR | Battery Over Voltage Protection IRQ <br> 0: no irq <br> 1: irq <br> Battery Voltage to normal to clear it |
+| ts_cfg |  | $0 \times 50$ |  |  |  |  |
+| reserved |  | $7: 5$ | RO | 0 | / |  |
+| ts_func |  | 4 | RW | EFUSE | POR | TS PIN function select: <br> 0: TS pin is the battery temperature sensor input and will affect the charger <br> 1: TS pin is the external fixed input and doesn't affect the charger |
+| ts_src_en |  | $3: 2$ | RW | EFUSE | POR | TS current source on/off enable 00: off <br> 01: on when TS channel of ADC is enabled 10: on only when TS channel is working and off when others channel is working 11: always on |
+| ts_curr |  | $1: 0$ | RW | 10b | POR | current source to TS pin config <br> 00: 20uA <br> 01: 40uA <br> 10: 50uA <br> 11: 60uA |
+| ts_hys12h |  | $0 \times 52$ |  |  |  |  |
+| ts_hys12h |  | $7: 0$ | RW | 2 h | POR | hysteresis for TS from low go to normal Thys $=$ N $* 16 \mathrm{mV}$ (default 32 mV ) |
+| ts_hysh21 |  | $0 \times 53$ |  |  |  |  |
+| ts_hysh21 |  | $7: 0$ | RW | 1 h | POR | hysteresis for TS from high go to normal Thys $=$ N $* 4 \mathrm{mV}$ (default 4 mV ) |
+| v1tf_chg |  | $0 \times 54$ |  |  |  |  |
+| v1tf_chg |  | $7: 0$ | RW | 29h | POR | VLTF in voltage of charge config <br> VLTF $=$ N $* 32 \mathrm{mV}$ (default is about 0deg) <br> This is also T1 of JEITA |
+| vhtf_chg |  | $0 \times 55$ |  |  |  |  |
+| vhtf_chg |  | $7: 0$ | RW | 58h | POR | VHTF in voltage of charge config <br> VHTF $=$ N $* 2 \mathrm{mV}$ (default is about 55deg) <br> This is also T4 of JEITA |
+| v1tf_work |  | $0 \times 56$ |  |  |  |  |
+| v1tf_work |  | $7: 0$ | RW | 3Eh | POR | VLTF in voltage of work config <br> VLTF $=$ N $* 32 \mathrm{mV}$ (default is about -10 deg ) |
 
 # Page 37
 
@@ -1237,27 +1237,21 @@ April, 28, 2019
 AXP2101
 April 28, 2019
 
-| aldo1_out | 4:0 | RW |  | EFUSE | System Reset | aldo1 output voltage config <br> 0. 5~3. 5V, 100mV/step, 31steps <br> 00000: 0. 5V <br> 00001: 0. 6V <br> 11110: 3. 5V <br> 11111: reserved |
-| :--: | :--: | :--: | :--: | :--: | :--: | :--: |
-| aldo2_cfg | 0x93 |  |  |  |  |  |
-| reserved | 7:5 | HO | 0 |  | / |  |
-
-a1do2 output voltage config
-0. 5~3. 5V, 100mV/step, 31steps
-00000: 0. 5V
-00001: 0. 6V
-11110: 3. 5V
-11111: reserved
-
-aldo2_out | 4:0 | RW |  | EFUSE | System Reset | aldo2 output voltage config <br> 0. 5~3. 5V, 100mV/step, 31steps <br> 00000: 0. 5V <br> 00001: 0. 6V <br> 11110: 3. 5V <br> 11111: reserved |
-
-a1do3_cfg | 0x94 | | | | | | reserved | 7:6 | HO | 0 | | / | | aldo3_out | 4:0 | RW |  | EFUSE | System Reset | aldo3 output voltage config <br> 0. 5~3. 5V, 100mV/step, 31steps <br> 00000: 0. 5V <br> 00001: 0. 6V <br> 11110: 3. 5V <br> 11111: reserved |
-
-a1do4_cfg | 0x95 | | | | | | reserved | 7:6 | HO | 0 | | / | | aldo4_out | 4:0 | RW |  | EFUSE | System Reset | aldo4 output voltage config <br> 0. 5~3. 5V, 100mV/step, 31steps <br> 00000: 0. 5V <br> 00001: 0. 6V <br> 11110: 3. 5V <br> 11111: reserved |
-
-b1do1 cfg | 0x96 | | | | | | reserved | 7:5 | HO | 0 | | / | | b1do1_out | 4:0 | RW |  | EFUSE | System Reset | b1do1 output voltage config <br> 0. 5~3. 5V, 100mV/step, 31steps <br> 00000: 0. 5V <br> 00001: 0. 6V <br> 11110: 3. 5V <br> 11111: reserved |
-
-b1do2 cfg 0x97 | | | | |
+| aldo1_out | 4:0 | RW | EFUSE | System Reset | aldo1 output voltage config <br> $0.5^{\sim} 3.5 \mathrm{~V}, 100 \mathrm{~mV} /$ step, 31steps <br> 00000: 0.5 V <br> 00001: 0.6 V <br> $\qquad$ <br> 11110: 3.5 V <br> 11111: reserved |
+| :--: | :--: | :--: | :--: | :--: | :--: |
+| aldo2_cfg | 0x93 |  |  |  |  |
+| reserved | 7:5 | HO | 0 | / |  |
+| aldo2_out | 4:0 | RW | EFUSE | System Reset | aldo2 output voltage config <br> $0.5^{\sim} 3.5 \mathrm{~V}, 100 \mathrm{mV} /$ step, 31steps <br> 00000: 0.5 V <br> 00001: 0.6 V <br> $\qquad$ <br> 11110: 3.5 V <br> 11111: reserved |
+| aldo3_cfg | 0x94 |  |  |  |  |
+| reserved | 7:6 | HO | 0 | / |  |
+| aldo3_out | 4:0 | RW | EFUSE | System Reset | aldo3 output voltage config <br> $0.5^{\sim} 3.5 \mathrm{~V}, 100 \mathrm{mV} /$ step, 31steps <br> 00000: 0.5 V <br> 00001: 0.6 V <br> $\qquad$ <br> 11110: 3.5 V <br> 11111: reserved |
+| aldo4_cfg | 0x95 |  |  |  |  |
+| reserved | 7:6 | HO | 0 | / |  |
+| aldo4_out | 4:0 | RW | EFUSE | System Reset | aldo4 output voltage config <br> $0.5^{\sim} 3.5 \mathrm{~V}, 100 \mathrm{mV} /$ step, 31steps <br> 00000: 0.5 V <br> 00001: 0.6 V <br> $\qquad$ <br> 11110: 3.5 V <br> 11111: reserved |
+| b1do1_cfg | 0x96 |  |  |  |  |
+| reserved | 7:5 | HO | 0 | / |  |
+| b1do1_out | 4:0 | RW | EFUSE | System Reset | b1do1 output voltage config <br> $0.5^{\sim} 3.5 \mathrm{~V}, 100 \mathrm{mV} /$ step, 31steps <br> 00000: 0.5 V <br> 00001: 0.6 V <br> $\qquad$ <br> 11110: 3.5 V <br> 11111: reserved |
+| b1do2_cfg | 0x97 |  |  |  |  |
 
 # Page 46
 

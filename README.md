@@ -231,6 +231,11 @@ The AXP2101 is used in various embedded devices and development boards that requ
 Known devices using the AXP2101:
 - **M5Stack Core2 v1.1** - ESP32-based IoT development kit with touch screen
 
+## Datasheet
+
+- [AXP2101 Datasheet - PDF](docs/AXP2101_no_watermark.pdf)
+- [AXP2101 Datasheet - Markdown](docs/AXP2101_no_watermark.md) (OCR-converted for easier reference)
+
 ## Feature Flags
 
 - **`default = []`**: No default features; async and blocking drivers are always available.
