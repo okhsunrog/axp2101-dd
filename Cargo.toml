@@ -1,6 +1,6 @@
 [package]
 name = "axp2101-dd"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 description = "A driver for the AXP2101 power management IC (uses device-driver crate)"
 authors = ["Danila Gornushko <me@okhsunrog.dev>"]
