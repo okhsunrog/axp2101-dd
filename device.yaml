@@ -2234,12 +2234,24 @@ ChgLedControl:
       base: uint
       start: 4
       end: 6 # 2 bits
-      description: "CHGLED pin output control when chgled_func is 10b."
+      description: "CHGLED pin output control when chgled_func is Manual. LED is on when driven low."
+      conversion:
+        name: ChgledOutputControl
+        HighImpedance: { value: 0, description: "Hi-Z (LED off)" }
+        Blink1Hz: { value: 1, description: "Low/Hi-Z 25%/75% duty 1Hz" }
+        Blink4Hz: { value: 2, description: "Low/Hi-Z 25%/75% duty 4Hz" }
+        DriveLow: { value: 3, description: "Drive low (LED fully on)" }
     chgled_func:
       base: uint
       start: 1
       end: 3 # 2 bits
-      description: "CHGLED pin display function config."
+      description: "CHGLED pin display function config. LED is active-low (on when CHGLED is low)."
+      conversion:
+        name: ChgledFunction
+        TypeA: { value: 0, description: "Type A: off=idle/full, blink1Hz=alarm, blink4Hz=overvoltage, on=charging" }
+        TypeB: { value: 1, description: "Type B: off=battery only, blink1Hz=charging, blink4Hz=alarm, on=VBUS no-bat/full" }
+        Manual: { value: 2, description: "Manual control via chgled_out_ctrl" }
+        Reserved: { value: 3, description: "Reserved" }
     chgled_en:
       base: bool
       start: 0
