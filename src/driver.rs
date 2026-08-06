@@ -1,6 +1,8 @@
 use super::{I2c, RegisterInterface, bisync, only_async, only_sync};
 use crate::adc_helpers::*;
-use crate::{AXP2101_I2C_ADDRESS, AdcChannel, AxpError, AxpInterface, AxpLowLevel, DcId, LdoId};
+use crate::{
+    AXP2101_I2C_ADDRESS, AdcChannel, AxpError, AxpInterface, AxpLowLevel, DcId, LdoId, VoffVoltage,
+};
 use crate::{BatteryCurrentDirection, ChargeVoltageLimit, FastChargeCurrentLimit};
 
 #[bisync]
@@ -631,5 +633,22 @@ where
     pub async fn power_off(&mut self) -> Result<(), AxpError<I2CBusErr>> {
         let mut op = self.ll.common_config();
         modify_internal(&mut op, |r| r.set_soft_power_off(true)).await
+    }
+
+    /// Trigger a soft power off then power on. Also runs POR (Power-On-Reset) of designated registers
+    #[bisync]
+    pub async fn soft_restart(&mut self) -> Result<(), AxpError<I2CBusErr>> {
+        let mut op = self.ll.common_config();
+        modify_internal(&mut op, |r| r.set_soft_system_restart(true)).await
+    }
+
+    /// Set automatic shutoff voltage for deep discharge protection
+    #[bisync]
+    pub async fn battery_discharge_limit(
+        &mut self,
+        voff_voltage: VoffVoltage,
+    ) -> Result<(), AxpError<I2CBusErr>> {
+        let mut op = self.ll.voff_threshold();
+        modify_internal(&mut op, |r| r.set_voff_thld(voff_voltage)).await
     }
 }
