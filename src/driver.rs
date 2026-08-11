@@ -1,6 +1,8 @@
 use super::{I2c, RegisterInterface, bisync, only_async, only_sync};
 use crate::adc_helpers::*;
-use crate::{AXP2101_I2C_ADDRESS, AdcChannel, AxpError, AxpInterface, AxpLowLevel, DcId, LdoId};
+use crate::{
+    AXP2101_I2C_ADDRESS, AdcChannel, AxpError, AxpInterface, AxpLowLevel, DcId, LdoId, VoffVoltage,
+};
 use crate::{BatteryCurrentDirection, ChargeVoltageLimit, FastChargeCurrentLimit};
 
 #[bisync]
@@ -538,6 +540,23 @@ where
     }
 
     #[bisync]
+    pub async fn get_interrupt_status1(&mut self) -> Result<(u8,), AxpError<I2CBusErr>> {
+        let mut op1 = self.ll.irq_status_1();
+        let status1 = read_internal(&mut op1).await?;
+
+        let irq1 = (status1.vinsert_irq() as u8) << 7
+            | (status1.vremove_irq() as u8) << 6
+            | (status1.binsert_irq() as u8) << 5
+            | (status1.bremove_irq() as u8) << 4
+            | (status1.pons_irq() as u8) << 3
+            | (status1.ponl_irq() as u8) << 2
+            | (status1.ponn_irq() as u8) << 1
+            | (status1.ponp_irq() as u8);
+
+        Ok((irq1,))
+    }
+
+    #[bisync]
     pub async fn get_interrupt_status2(&mut self) -> Result<(u8,), AxpError<I2CBusErr>> {
         let mut op2 = self.ll.irq_status_2();
         let status2 = read_internal(&mut op2).await?;
@@ -552,6 +571,22 @@ where
             | (status2.bovp_irq() as u8);
 
         Ok((irq2,))
+    }
+
+    #[bisync]
+    pub async fn clear_interrupt_status1(&mut self) -> Result<(), AxpError<I2CBusErr>> {
+        let mut op1 = self.ll.irq_status_1();
+        write_internal(&mut op1, |r| {
+            r.set_vinsert_irq(true);
+            r.set_vremove_irq(true);
+            r.set_binsert_irq(true);
+            r.set_bremove_irq(true);
+            r.set_pons_irq(true);
+            r.set_ponl_irq(true);
+            r.set_ponn_irq(true);
+            r.set_ponp_irq(true);
+        })
+        .await
     }
 
     #[bisync]
@@ -631,5 +666,22 @@ where
     pub async fn power_off(&mut self) -> Result<(), AxpError<I2CBusErr>> {
         let mut op = self.ll.common_config();
         modify_internal(&mut op, |r| r.set_soft_power_off(true)).await
+    }
+
+    /// Trigger a soft power off then power on. Also runs POR (Power-On-Reset) of designated registers
+    #[bisync]
+    pub async fn soft_restart(&mut self) -> Result<(), AxpError<I2CBusErr>> {
+        let mut op = self.ll.common_config();
+        modify_internal(&mut op, |r| r.set_soft_system_restart(true)).await
+    }
+
+    /// Set automatic shutoff voltage for deep discharge protection
+    #[bisync]
+    pub async fn battery_discharge_limit(
+        &mut self,
+        voff_voltage: VoffVoltage,
+    ) -> Result<(), AxpError<I2CBusErr>> {
+        let mut op = self.ll.voff_threshold();
+        modify_internal(&mut op, |r| r.set_voff_thld(voff_voltage)).await
     }
 }
