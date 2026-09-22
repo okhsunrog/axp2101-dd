@@ -6,7 +6,8 @@ description = "A driver for the AXP2101 power management IC (uses device-driver 
 authors = ["Danila Gornushko <me@okhsunrog.dev>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/okhsunrog/axp2101-dd"
-keywords = ["embedded-hal-driver", "async", "no-alloc", "no-std", "embedded"]
+keywords = ["embedded-hal-driver", "async", "no-std", "pmic", "axp2101"]
+categories = ["embedded", "no-std", "no-std::no-alloc", "hardware-support"]
 readme = "README.md"
 documentation = "https://docs.rs/axp2101-dd"
 
