@@ -3,13 +3,13 @@
 //!
 //! This crate provides a bisync-based driver for the AXP2101 power management IC,
 //! built upon the `device-driver` crate for robust, declarative register
-//! definitions via a YAML manifest. It supports both asynchronous (`async`)
+//! definitions via a DDSL manifest. It supports both asynchronous (`async`)
 //! and blocking operation through a unified API, using the [`bisync`](https://docs.rs/bisync) crate
 //! for seamless compatibility with both `embedded-hal` and `embedded-hal-async` traits.
 //!
 //! ## Features
 //!
-//! *   **Declarative Register Map:** Full device configuration defined in `device.yaml`.
+//! *   **Declarative Register Map:** Full device configuration defined in `device.ddsl`.
 //! *   **Unified Async/Blocking Support:** Write your code once and use it in both async and blocking contexts via bisync.
 //! *   **Type-Safe API:** High-level functions for common operations (e.g., setting voltages)
 //!     and a generated low-level API (`ll`) for direct register access.
@@ -42,7 +42,7 @@
 //! # Ok(())
 //! ```
 //!
-//! For a detailed register map, please refer to the `device.yaml` file in the
+//! For a detailed register map, please refer to the `device.ddsl` file in the
 //! [repository](https://github.com/okhsunrog/axp2101-dd).
 //!
 //! ## Supported Devices
@@ -62,7 +62,10 @@ mod adc_helpers;
 
 use thiserror::Error;
 
-device_driver::create_device!(device_name: AxpLowLevel, manifest: "device.yaml");
+device_driver::compile!(
+    options: "--rust-defmt-feature=defmt",
+    manifest: "device.ddsl"
+);
 pub const AXP2101_I2C_ADDRESS: u8 = 0x34;
 
 #[derive(Debug, Error)]
@@ -128,6 +131,17 @@ impl<I2CBus> AxpInterface<I2CBus> {
     pub fn new(i2c_bus: I2CBus) -> Self {
         Self { i2c_bus }
     }
+}
+
+/// The address/error types are shared between the blocking and async register
+/// interfaces, so this impl lives outside the two `bisync` modules.
+impl<I2CBus, E> device_driver::RegisterInterfaceBase for AxpInterface<I2CBus>
+where
+    I2CBus: embedded_hal::i2c::ErrorType<Error = E>,
+    E: core::fmt::Debug,
+{
+    type AddressType = u8;
+    type Error = AxpError<E>;
 }
 
 #[path = "."]

@@ -1,0 +1,1596 @@
+/// AXP2101 Single Cell PMIC with E-gauge Device Driver Definition
+/// This file defines the register map and configuration for the AXP2101
+/// Power Management IC manufactured by X-Powers.
+///
+/// Features:
+/// - 3.9V-5.5V Input Operating Range
+/// - Single Cell Battery with Fuel Gauge (E-gauge 3.0)
+/// - 4 DC-DC converters (DCDC1-4)
+/// - 11 LDO regulators (ALDO1-4, BLDO1-2, DLDO1-2, CPUSLDO, RTCLDO1-2)
+/// - 100mA-1A Linear charger
+/// - 14-bit ADC for voltage/temperature monitoring
+/// - I2C/TWI and RSB interface support
+///
+/// Interface: I2C (default address 0x68/0x69) or RSB
+/// Package: QFN-40 (5mm x 5mm)
+device AxpLowLevel {
+    default-byte-order: BE,
+    register-address-type: u8,
+    // Split on underscores, hyphens, lower->upper and every letter<->digit
+    // transition so `Dcdc1VoltageConfig` becomes `dcdc_1_voltage_config`.
+    word-boundaries: "_:-: :bB:A1:1A:1a:a1:AAa",
+    default-access: RW,
+
+    /// Power management status register indicating various system states including
+    /// VBUS status, BATFET state, battery presence, and thermal regulation.
+    register PowerStatus {
+        address: 0x00,
+        access: RO,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// VBUS good indication (true: good, false: not good).
+            field vbus_good 5,
+            /// BATFET state (true: open, false: closed).
+            field batfet_state 4,
+            /// Battery present state (true: present, false: absent).
+            field battery_present 3,
+            /// Battery in Active Mode (true: active mode, false: normal).
+            field battery_active_mode 2,
+            /// Thermal regulation status (true: in thermal regulation, false: normal).
+            field thermal_regulation_active 1,
+            /// Current limit state (true: in current limit, false: normal).
+            field current_limit_active 0,
+        },
+    },
+    /// System status register showing battery current direction, system power state,
+    /// VINDPM status, and charging status.
+    register SystemStatus {
+        address: 0x01,
+        access: RO,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Battery current direction indicator.
+            field battery_current_direction 6:5 -> _ as enum BatteryCurrentDirection {
+                /// Battery in standby
+                Standby: 0,
+                /// Battery charging
+                Charging: 1,
+                /// Battery discharging
+                Discharging: 2,
+                /// Reserved state
+                Reserved: 3,
+            },
+            /// System status indication (true: system power on, false: system power off).
+            field system_power_on 4,
+            /// VINDPM status (true: in VINDPM, false: not in VINDPM).
+            field vindpm_active 3,
+            /// Charging status indication.
+            field charging_status 2:0 -> _ as enum ChargingStatus {
+                /// Trickle charge mode
+                TriCharge: 0,
+                /// Pre-charge mode
+                PreCharge: 1,
+                /// Constant current (CC) mode
+                ConstantCurrent: 2,
+                /// Constant voltage (CV) mode
+                ConstantVoltage: 3,
+                /// Charge completed
+                ChargeDone: 4,
+                /// Not charging
+                NotCharging: 5,
+                /// Reserved state
+                Reserved: default _,
+            },
+        },
+    },
+    /// Chip identification register containing version and ID information.
+    /// Expected value for AXP2101 is 0x47 (0100_0111).
+    register ChipId {
+        address: 0x03,
+        access: RO,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Chip ID high bits.
+            field chip_id_high 7:6,
+            /// Chip version.
+            field chip_version 5:4 -> _ as enum ChipVersion {
+                /// A version
+                VersionA: 0,
+                /// B version
+                VersionB: 1,
+                /// Reserved
+                Reserved1: 2,
+                /// Reserved
+                Reserved2: 3,
+            },
+            /// Chip ID low bits. Combined with high bits: 01_0111 = AXP2101.
+            field chip_id_low 3:0,
+        },
+    },
+    /// General purpose data buffer registers for storing system data.
+    /// These registers retain their values as long as any power source is present.
+    /// Useful for storing configuration data or system state between resets.
+    register DataBuffer[5 stride 1] {
+        address: 0x04,
+        reset: 0x0,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// 8-bit data storage value.
+            field data 7:0,
+        },
+    },
+    /// Common configuration register controlling various system behaviors including
+    /// discharge control, restart functionality, and power-off controls.
+    register CommonConfig {
+        address: 0x10,
+        reset: 0x30,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Internal off-discharge enable for DCDC & LDO & SWITCH (true: enable, false: disable).
+            field discharge_off_enable 5,
+            /// PWROK PIN pull low to restart the system (true: enable, false: disable).
+            field pwrok_restart_enable 3,
+            /// PWRON 16s to shutdown the PMIC enable (true: enable, false: disable).
+            field power_on_shutdown_enable 2,
+            /// Restart the SoC System, POWOFF/POWON and reset related registers (true: reset).
+            field soft_system_restart 1 WO,
+            /// Soft PWROFF (true: power off).
+            field soft_power_off 0 WO,
+        },
+    },
+    /// BATFET control register for battery connection management and overcurrent protection.
+    register BatfetControl {
+        address: 0x12,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// BATFET enable when POWEROFF and Battery only (true: enable, false: disable).
+            field batfet_poweroff_enable 3,
+            /// BATFET close when OCP (6A) for 100us (true: enable, false: disable).
+            field batfet_ocp_enable 1,
+        },
+    },
+    /// Die temperature control register for setting over-temperature protection
+    /// and enabling temperature detection.
+    register DieTempControl {
+        address: 0x13,
+        reset: 0x3,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// DIE Over Temperature Protection Level1 Config.
+            field die_over_temp_protection_threshold 2:1 -> _ as enum DieOverTempThreshold {
+                /// 115°C
+                Deg115: 0,
+                /// 125°C
+                Deg125: 1,
+                /// 135°C
+                Deg135: 2,
+                /// Reserved
+                Reserved: 3,
+            },
+            /// DIE Temperature Detect Enable (true: enable, false: disable).
+            field die_temp_detect_enable 0,
+        },
+    },
+    /// Minimum system voltage control.
+    register MinSystemVoltageControl {
+        address: 0x14,
+        reset: 0x60,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Linear Charger Vsys voltage dpm. 4.1V + N*0.1V
+            field in_vsys_dpm 6:4 -> _ as enum MinSystemVoltage {
+                /// 4.1V
+                V4_1: 0,
+                /// 4.2V
+                V4_2: 1,
+                /// 4.3V
+                V4_3: 2,
+                /// 4.4V
+                V4_4: 3,
+                /// 4.5V
+                V4_5: 4,
+                /// 4.6V
+                V4_6: 5,
+                /// 4.7V
+                V4_7: 6,
+                /// 4.8V
+                V4_8: 7,
+            },
+        },
+    },
+    /// VINDPM (Input Voltage Dynamic Power Management) configuration register.
+    /// Controls the minimum input voltage threshold for power management.
+    register VindpmConfig {
+        address: 0x15,
+        reset: 0x6,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// VINDPM threshold configuration.
+            field vindpm_threshold 3:0 -> _ as enum VindpmVoltage {
+                /// 3.88V
+                V3_88: 0,
+                /// 3.96V
+                V3_96: 1,
+                /// 4.04V
+                V4_04: 2,
+                /// 4.12V
+                V4_12: 3,
+                /// 4.20V
+                V4_20: 4,
+                /// 4.28V
+                V4_28: 5,
+                /// 4.36V
+                V4_36: 6,
+                /// 4.44V
+                V4_44: 7,
+                /// 4.52V
+                V4_52: 8,
+                /// 4.60V
+                V4_60: 9,
+                /// 4.68V
+                V4_68: 10,
+                /// 4.76V
+                V4_76: 11,
+                /// 4.84V
+                V4_84: 12,
+                /// 4.92V
+                V4_92: 13,
+                /// 5.00V
+                V5_00: 14,
+                /// 5.08V
+                V5_08: 15,
+            },
+        },
+    },
+    /// Input current limit configuration register.
+    /// Sets the maximum allowable input current from VBUS.
+    register InputCurrentLimit {
+        address: 0x16,
+        reset: 0x1,
+        fields: fieldset InputCurrentLimitFieldSet {
+            size-bytes: 1,
+
+            /// Input current limit setting.
+            field current_limit 2:0 -> _ as enum InputCurrentLimit {
+                /// 100mA
+                Ma100: 0,
+                /// 500mA
+                Ma500: 1,
+                /// 900mA
+                Ma900: 2,
+                /// 1000mA
+                Ma1000: 3,
+                /// 1500mA
+                Ma1500: 4,
+                /// 2000mA
+                Ma2000: 5,
+                /// Reserved
+                Reserved1: 6,
+                /// Reserved
+                Reserved2: 7,
+            },
+        },
+    },
+    /// Indicates the source of the power-on event.
+    register PowerOnStatus {
+        address: 0x20,
+        access: RO,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// POWERON always high when EN Mode as POWERON Source (true: yes, false: no).
+            field en_pwron_stat 5,
+            /// Battery Insert and Good as POWERON Source (true: yes, false: no).
+            field bat_pwron_stat 4,
+            /// Battery Voltage > 3.3V when Charged as POWERON Source (true: yes, false: no).
+            field chg_pwron_stat 3,
+            /// Vbus Insert and Good as POWERON Source (true: yes, false: no).
+            field vbus_pwron_stat 2,
+            /// IRQ PIN Pull-down as POWERON Source (true: yes, false: no).
+            field irq_pwron_stat 1,
+            /// POWERON low for onlevel when POWERON Mode as POWERON Source (true: yes, false: no).
+            field btn_pwron_stat 0,
+        },
+    },
+    /// Indicates the source of the power-off event.
+    register PowerOffStatus {
+        address: 0x21,
+        access: RO,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Die Over Temperature as POWEROFF Source (true: yes, false: no).
+            field dot_pwroff_stat 7,
+            /// DCDC Over Voltage as POWEROFF Source (true: yes, false: no).
+            field dcov_pwroff_stat 6,
+            /// DCDC Under Voltage as POWEROFF Source (true: yes, false: no).
+            field dcuv_pwroff_stat 5,
+            /// VBUS Over Voltage as POWEROFF Source (true: yes, false: no).
+            field vbov_pwroff_stat 4,
+            /// Vsys Under Voltage as POWEROFF Source (true: yes, false: no).
+            field vsuv_pwroff_stat 3,
+            /// POWERON always low when EN Mode as POWEROFF Source (true: yes, false: no).
+            field en_pwroff_stat 2,
+            /// Software config as POWEROFF Source (true: yes, false: no).
+            field sw_pwroff_stat 1,
+            /// POWERON Pull down for offlevel when POWERON Mode as POWEROFF Source (true: yes, false: no).
+            field btn_pwroff_stat 0,
+        },
+    },
+    /// Enables different sources for power-off events.
+    register PowerOffEnable {
+        address: 0x22,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// DIE Over-Temperature (LEVEL2) as POWEROFF Source enable (true: enable, false: disable).
+            field dot_pwroff_en 2,
+            /// PWRON > OFFLEVEL as POWEROFF Source enable (true: enable, false: disable).
+            field btn_pwroff_en 1,
+            /// Function Select when btn_pwroff_en=1 and button power-off occur (0: Power-off, 1: Restart).
+            field btn_pwroff_mode 0,
+        },
+    },
+    /// Controls DCDC OVP/UVP power-off enables.
+    register DcdcPowerOffControl {
+        address: 0x23,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// DCDC 120%(130%) high voltage turn off PMIC function (true: enable, false: disable).
+            field dcdc_ovp_en 5,
+            /// DCDC5 85% low voltage turn off PMIC function (true: enable, false: disable).
+            field dcdc5_uvp_en 4,
+            /// DCDC4 85% low voltage turn off PMIC function (true: enable, false: disable).
+            field dcdc4_uvp_en 3,
+            /// DCDC3 85% low voltage turn off PMIC function (true: enable, false: disable).
+            field dcdc3_uvp_en 2,
+            /// DCDC2 85% low voltage turn off PMIC function (true: enable, false: disable).
+            field dcdc2_uvp_en 1,
+            /// DCDC1 85% low voltage turn off PMIC function (true: enable, false: disable).
+            field dcdc1_uvp_en 0,
+        },
+    },
+    /// Vsys voltage for POWEROFF threshold setting.
+    register VoffThreshold {
+        address: 0x24,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Battery Voltage for POWEROFF (2.6V + N*0.1V).
+            field voff_thld 2:0 -> _ as enum VoffVoltage {
+                /// 2.6V
+                V2_6: 0,
+                /// 2.7V
+                V2_7: 1,
+                /// 2.8V
+                V2_8: 2,
+                /// 2.9V
+                V2_9: 3,
+                /// 3.0V
+                V3_0: 4,
+                /// 3.1V
+                V3_1: 5,
+                /// 3.2V
+                V3_2: 6,
+                /// 3.3V
+                V3_3: 7,
+            },
+        },
+    },
+    /// PWROK setting and PWROFF sequence control.
+    register PowerTimingControl {
+        address: 0x25,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Check the PWROK Pin enable after all dcdc/ldo output valid 128ms (true: enable, false: disable).
+            field pwrok_chk_en 4,
+            /// POWEROFF Delay 4ms after PWROK disable (true: enable, false: disable).
+            field pwroff_dly_en 3,
+            /// POWEROFF Sequence Control (0: At the same time, 1: the reverse of the Startup).
+            field pwroff_seq_ctrl 2,
+            /// Delay of PWROK after all power output good.
+            field pwrok_dly 1:0 -> _ as enum PwrokDelay {
+                /// 8ms
+                Ms8: 0,
+                /// 16ms
+                Ms16: 1,
+                /// 32ms
+                Ms32: 2,
+                /// 64ms
+                Ms64: 3,
+            },
+        },
+    },
+    /// Sleep and wakeup control.
+    register SleepWakeupControl {
+        address: 0x26,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// IRQ Pin low to Wakeup (true: enable, false: disable).
+            field irq_wakeup_en 4,
+            /// PWROK be low-level enable when Wakup (true: enable, false: disable).
+            field pwrok_wakeup_ind 3,
+            /// DCDC/LDO Voltage Select when Wakup (0: The Default, 1: The voltage before wakup).
+            field wakeup_cfg_sel 2,
+            /// Wake Up enable (true: enable, false: disable).
+            field wakeup_en 1,
+            /// SLEEP enable (true: enable, false: disable).
+            field sleep_en 0,
+        },
+    },
+    /// IRQLEVEL/OFFLEVEL/ONLEVEL setting.
+    register PowerOnLevel {
+        address: 0x27,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// IRQLEVEL config.
+            field irq_level 5:4 -> _ as enum IrqLevel {
+                /// 1s
+                S1: 0,
+                /// 1.5s
+                S1_5: 1,
+                /// 2s
+                S2: 2,
+                /// 2.5s
+                S2_5: 3,
+            },
+            /// OFFLEVEL config.
+            field off_level 3:2 -> _ as enum OffLevel {
+                /// 4s
+                S4: 0,
+                /// 6s
+                S6: 1,
+                /// 8s
+                S8: 2,
+                /// 10s
+                S10: 3,
+            },
+            /// ONLEVEL config.
+            field on_level 1:0 -> _ as enum OnLevel {
+                /// 128ms
+                Ms128: 0,
+                /// 512ms
+                Ms512: 1,
+                /// 1s
+                S1: 2,
+                /// 2s
+                S2: 3,
+            },
+        },
+    },
+    /// Fast power-on setting for DCDCs.
+    register FastPowerOnConfig0 {
+        address: 0x28,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// DCDC4 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable).
+            field dcdc4_fstart_seq 7:6,
+            /// DCDC3 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable).
+            field dcdc3_fstart_seq 5:4,
+            /// DCDC2 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable).
+            field dcdc2_fstart_seq 3:2,
+            /// DCDC1 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable).
+            field dcdc1_fstart_seq 1:0,
+        },
+    },
+    /// Fast power-on setting for ALDOs.
+    register FastPowerOnConfig1 {
+        address: 0x29,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// ALDO3 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable).
+            field aldo3_fstart_seq 7:6,
+            /// ALDO2 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable).
+            field aldo2_fstart_seq 5:4,
+            /// ALDO1 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable).
+            field aldo1_fstart_seq 3:2,
+            /// DCDC5 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable).
+            field dcdc5_fstart_seq 1:0,
+        },
+    },
+    /// Fast power-on setting for CPUSLDO, BLDOs, and ALDO4.
+    register FastPowerOnConfig2 {
+        address: 0x2A,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// CPUSLDO Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable).
+            field cpusldo_fstart_seq 7:6,
+            /// BLDO2 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable).
+            field bldo2_fstart_seq 5:4,
+            /// BLDO1 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable).
+            field bldo1_fstart_seq 3:2,
+            /// ALDO4 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable).
+            field aldo4_fstart_seq 1:0,
+        },
+    },
+    /// Fast power-on setting and control for DLDOs.
+    register FastPowerOnConfig3 {
+        address: 0x2B,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Fast Power On Enable (true: enable, false: disable).
+            field fast_pwron_en 7,
+            /// Fast Wake up Enable (true: enable, false: disable).
+            field fast_wakeup_en 6,
+            /// DLDO2 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable).
+            field dldo2_fstart_seq 3:2,
+            /// DLDO1 Fast Power On Start Sequence (00-10: Start Sequence Code, 11: disable).
+            field dldo1_fstart_seq 1:0,
+        },
+    },
+    /// ADC Channel enable control.
+    register AdcChannelEnable0 {
+        address: 0x30,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// general purpose ADC channel enable (true: enable, false: disable).
+            field gpadc_ch_en 5,
+            /// die temperature measure ADC channel enable (true: enable, false: disable).
+            field tdie_ch_en 4,
+            /// system voltage measure ADC channel enable (true: enable, false: disable).
+            field vsys_ch_en 3,
+            /// vbus voltage measure ADC channel enable (true: enable, false: disable).
+            field vbus_ch_en 2,
+            /// TS pin measure ADC channel enable (true: enable, false: disable).
+            field ts_ch_en 1,
+            /// battery voltage measure ADC channel enable (true: enable, false: disable).
+            field vbat_ch_en 0,
+        },
+    },
+    /// Battery parameter ROM.
+    register BatteryParameter {
+        address: 0xA1,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            field brom 7:0,
+        },
+    },
+    /// Fuel gauge control.
+    register FuelGaugeControl {
+        address: 0xA2,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// ROM or SRAM select (1: select sram, 0: select rom).
+            field rom_sel 4,
+            /// brom writer control (1: enable, 0: disable).
+            field bromup_en 0,
+        },
+    },
+    /// Module enable register controlling major system functions including
+    /// fuel gauge, battery charging, and watchdog functionality.
+    register ModuleEnable {
+        address: 0x18,
+        reset: 0xa,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Fuel Gauge module enable (true: enable, false: disable).
+            field fuel_gauge_enable 3,
+            /// Button battery charge enable (true: enable, false: disable).
+            field button_battery_charge_enable 2,
+            /// Cell battery charge enable (true: enable, false: disable).
+            field battery_charge_enable 1,
+            /// Watchdog module enable (true: enable, false: disable).
+            field watchdog_enable 0,
+        },
+    },
+    /// Watchdog timer control.
+    register WatchdogControl {
+        address: 0x19,
+        reset: 0x6,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Watchdog Reset Config.
+            field watchdog_reset_config 5:4 -> _ as enum WatchdogResetConfig {
+                /// IRQ only
+                IrqOnly: 0,
+                /// IRQ and System Reset
+                IrqAndSystemReset: 1,
+                /// IRQ, System Reset and Pull down PWROK 1s
+                IrqResetAndPwrokLow: 2,
+                /// IRQ, System Reset, DCDC/LDO PWROFF & PWRON
+                IrqResetAndPowerCycle: 3,
+            },
+            /// Watchdog clear signal (true: clear).
+            field watchdog_clear 3 WO,
+            /// TWSI watchdog timer config.
+            field watchdog_timer 2:0 -> _ as enum WatchdogTimer {
+                /// 1s
+                S1: 0,
+                /// 2s
+                S2: 1,
+                /// 4s
+                S4: 2,
+                /// 8s
+                S8: 3,
+                /// 16s
+                S16: 4,
+                /// 32s
+                S32: 5,
+                /// 64s
+                S64: 6,
+                /// 128s
+                S128: 7,
+            },
+        },
+    },
+    /// Low battery warning threshold setting.
+    register LowBatteryWarningThreshold {
+        address: 0x1A,
+        reset: 0xa1,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Low battery warning threshold 5-20%, 1% per step. (value + 5)%
+            field warning_threshold 7:4,
+            /// Low battery shutdown threshold 0-15%, 1% per step.
+            field shutdown_threshold 3:0,
+        },
+    },
+    /// Recharge configuration register controlling automatic recharge behavior
+    /// based on battery voltage or fuel gauge SOC level.
+    register RechargeConfig {
+        address: 0x60,
+        reset: 0x02,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Recharge with Battery Voltage below Vrechg enable (true: enable, false: disable).
+            field voltage_recharge_enable 1,
+            /// Recharge with Egauge SOC Level enable (true: enable, false: disable).
+            field gauge_recharge_enable 0,
+        },
+    },
+    /// Pre-charge current limit configuration.
+    /// Controls the charging current during the pre-charge phase when battery voltage is low.
+    register PrechargeCurrentConfig {
+        address: 0x61,
+        reset: 0x5,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Pre-charge current limit (25mA per step).
+            field precharge_current 3:0 -> _ as enum PrechargeCurrentLimit {
+                /// 0mA
+                Ma0: 0,
+                /// 25mA
+                Ma25: 1,
+                /// 50mA
+                Ma50: 2,
+                /// 75mA
+                Ma75: 3,
+                /// 100mA
+                Ma100: 4,
+                /// 125mA
+                Ma125: 5,
+                /// 150mA
+                Ma150: 6,
+                /// 175mA
+                Ma175: 7,
+                /// 200mA
+                Ma200: 8,
+                /// Reserved values 9-15
+                Reserved: default _,
+            },
+        },
+    },
+    /// Fast charge (constant current) current limit configuration.
+    /// Controls the charging current during the main charging phase.
+    register FastChargeCurrentConfig {
+        address: 0x62,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Fast charge current limit.
+            field fast_charge_current 4:0 -> _ as enum FastChargeCurrentLimit {
+                /// 0mA
+                Ma0: 0,
+                /// 100mA
+                Ma100: 4,
+                /// 125mA
+                Ma125: 5,
+                /// 150mA
+                Ma150: 6,
+                /// 175mA
+                Ma175: 7,
+                /// 200mA
+                Ma200: 8,
+                /// 300mA
+                Ma300: 9,
+                /// 400mA
+                Ma400: 10,
+                /// 500mA
+                Ma500: 11,
+                /// 600mA
+                Ma600: 12,
+                /// 700mA
+                Ma700: 13,
+                /// 800mA
+                Ma800: 14,
+                /// 900mA
+                Ma900: 15,
+                /// 1000mA
+                Ma1000: 16,
+                /// Reserved values
+                Reserved: default _,
+            },
+        },
+    },
+    /// Charge termination current configuration.
+    /// Controls when charging stops based on current level.
+    register TerminationCurrentConfig {
+        address: 0x63,
+        reset: 0x15,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Charging termination current enable (true: enable, false: disable).
+            field termination_enable 4,
+            /// Termination current limit (25mA per step).
+            field termination_current 3:0 -> _ as enum TerminationCurrentLimit {
+                /// 0mA
+                Ma0: 0,
+                /// 25mA
+                Ma25: 1,
+                /// 50mA
+                Ma50: 2,
+                /// 75mA
+                Ma75: 3,
+                /// 100mA
+                Ma100: 4,
+                /// 125mA
+                Ma125: 5,
+                /// 150mA
+                Ma150: 6,
+                /// 175mA
+                Ma175: 7,
+                /// 200mA
+                Ma200: 8,
+                /// Reserved values 9-15
+                Reserved: default _,
+            },
+        },
+    },
+    /// Charge voltage limit configuration.
+    /// Sets the target voltage for battery charging.
+    register ChargeVoltageConfig {
+        address: 0x64,
+        reset: 0x3,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Charge voltage limit setting.
+            field charge_voltage 2:0 -> _ as enum ChargeVoltageLimit {
+                /// 4.6V
+                V4_6: 0,
+                /// 4.0V
+                V4_0: 1,
+                /// 4.1V
+                V4_1: 2,
+                /// 4.2V
+                V4_2: 3,
+                /// 4.35V
+                V4_35: 4,
+                /// 4.4V
+                V4_4: 5,
+                /// Reserved
+                Reserved1: 6,
+                /// Reserved
+                Reserved2: 7,
+            },
+        },
+    },
+    /// DCDC configuration register 0 controlling DCDC enables and DVM settings.
+    register DcdcConfig0 {
+        address: 0x80,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Force DCDC to work in CCM mode (true: enable, false: disable).
+            field dcdc_force_ccm 6,
+            /// DVM voltage ramp control (true: 31.250us/step, false: 15.625us/step).
+            field dvm_speed 5,
+            /// DCDC5 enable (true: enable, false: disable).
+            field dcdc5_enable 4,
+            /// DCDC4 enable (true: enable, false: disable).
+            field dcdc4_enable 3,
+            /// DCDC3 enable (true: enable, false: disable).
+            field dcdc3_enable 2,
+            /// DCDC2 enable (true: enable, false: disable).
+            field dcdc2_enable 1,
+            /// DCDC1 enable (true: enable, false: disable).
+            field dcdc1_enable 0,
+        },
+    },
+    /// DCDC configuration register 1 controlling PWM/PFM modes and frequency spreading.
+    register DcdcConfig1 {
+        address: 0x81,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// DCDC frequency spread enable (true: enable, false: disable).
+            field dcdc_frequency_spread_enable 7,
+            /// DCDC frequency spread range control (true: 100kHz, false: 50kHz).
+            field dcdc_frequency_spread_range 6,
+            /// DCDC4 PWM/PFM control (true: always PWM, false: auto switch).
+            field dcdc4_pwm_mode 5,
+            /// DCDC3 PWM/PFM control (true: always PWM, false: auto switch).
+            field dcdc3_pwm_mode 4,
+            /// DCDC2 PWM/PFM control (true: always PWM, false: auto switch).
+            field dcdc2_pwm_mode 3,
+            /// DCDC1 PWM/PFM control (true: always PWM, false: auto switch).
+            field dcdc1_pwm_mode 2,
+            /// DCDC UVP debounce time configuration.
+            field dcdc_uvp_debounce 1:0 -> _ as enum DcdcUvpDebounce {
+                /// 60us
+                Us60: 0,
+                /// 120us
+                Us120: 1,
+                /// 180us
+                Us180: 2,
+                /// 240us
+                Us240: 3,
+            },
+        },
+    },
+    /// DCDC1 output voltage configuration.
+    /// Voltage range: 1.5V to 3.4V in 100mV steps.
+    register Dcdc1VoltageConfig {
+        address: 0x82,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// DCDC1 output voltage (1.5V + value * 100mV).
+            field voltage_setting 4:0,
+        },
+    },
+    /// DCDC2 output voltage configuration with DVM support.
+    /// Complex voltage mapping: 0.5-1.2V (10mV steps), 1.22-1.54V (20mV steps).
+    register Dcdc2VoltageConfig {
+        address: 0x83,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// DCDC2 DVM enable control (true: enable, false: disable).
+            field dvm_enable 7,
+            /// DCDC2 output voltage setting (complex mapping, see datasheet).
+            field voltage_setting 6:0,
+        },
+    },
+    /// DCDC3 output voltage configuration with DVM support.
+    /// Same voltage mapping as DCDC2: 0.5-1.2V (10mV steps), 1.22-1.54V (20mV steps), 1.6-3.4V (100mV steps).
+    register Dcdc3VoltageConfig {
+        address: 0x84,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// DCDC3 DVM enable control (true: enable, false: disable).
+            field dvm_enable 7,
+            /// DCDC3 output voltage setting (complex mapping, see datasheet).
+            field voltage_setting 6:0,
+        },
+    },
+    /// DCDC4 output voltage configuration.
+    /// Voltage mapping: 0.5-1.2V (10mV steps), 1.22-1.84V (20mV steps).
+    register Dcdc4VoltageConfig {
+        address: 0x85,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// DCDC4 output voltage setting (complex mapping, see datasheet).
+            field voltage_setting 6:0,
+        },
+    },
+    /// DCDC5 configuration and output voltage.
+    register Dcdc5VoltageConfig {
+        address: 0x86,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Slow down DCDC5 frequency compensation (true: enable, false: disable).
+            field slow_comp_enable 5,
+            /// DCDC5 output voltage (1.4V + value * 100mV).
+            field voltage_setting 4:0,
+        },
+    },
+    /// DCDC over-current threshold configuration.
+    register DcdcOcConfig {
+        address: 0x87,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// DCDC3 OC threshold.
+            field dcdc3_oc_threshold 5:4 -> _ as enum Dcdc3OcThreshold {
+                /// 3.0A
+                A3_0: 0,
+                /// 3.5A
+                A3_5: 1,
+                /// 4.0A
+                A4_0: 2,
+                /// 5.0A
+                A5_0: 3,
+            },
+            /// DCDC2 OC threshold.
+            field dcdc2_oc_threshold 3:2 -> _ as enum Dcdc2OcThreshold {
+                /// 2.5A
+                A2_5: 0,
+                /// 3.0A
+                A3_0: 1,
+                /// 3.5A
+                A3_5: 2,
+                /// 4.0A
+                A4_0: 3,
+            },
+            /// DCDC1 OC threshold.
+            field dcdc1_oc_threshold 1:0 -> _ as enum Dcdc1OcThreshold {
+                /// 2.5A
+                A2_5: 0,
+                /// 3.0A
+                A3_0: 1,
+                /// 3.5A
+                A3_5: 2,
+                /// 4.0A
+                A4_0: 3,
+            },
+        },
+    },
+    /// LDO enable configuration register 0.
+    /// Controls enable/disable state for DLDO1, CPUSLDO, BLDO1-2, ALDO1-4.
+    register LdoEnableConfig0 {
+        address: 0x90,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// DLDO1 enable (true: enable, false: disable).
+            field dldo1_enable 7,
+            /// CPUSLDO enable (true: enable, false: disable).
+            field cpusldo_enable 6,
+            /// BLDO2 enable (true: enable, false: disable).
+            field bldo2_enable 5,
+            /// BLDO1 enable (true: enable, false: disable).
+            field bldo1_enable 4,
+            /// ALDO4 enable (true: enable, false: disable).
+            field aldo4_enable 3,
+            /// ALDO3 enable (true: enable, false: disable).
+            field aldo3_enable 2,
+            /// ALDO2 enable (true: enable, false: disable).
+            field aldo2_enable 1,
+            /// ALDO1 enable (true: enable, false: disable).
+            field aldo1_enable 0,
+        },
+    },
+    /// LDO enable configuration register 1.
+    /// Controls enable/disable state for DLDO2.
+    register LdoEnableConfig1 {
+        address: 0x91,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// DLDO2 enable (true: enable, false: disable).
+            field dldo2_enable 0,
+        },
+    },
+    /// ALDO1 output voltage config (0.5-3.5V, 100mV/step).
+    register Aldo1VoltageConfig {
+        address: 0x92,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            field voltage_setting 4:0,
+        },
+    },
+    /// ALDO2 output voltage config (0.5-3.5V, 100mV/step).
+    register Aldo2VoltageConfig {
+        address: 0x93,
+        fields: Aldo1VoltageConfig,
+    },
+    /// ALDO3 output voltage config (0.5-3.5V, 100mV/step).
+    register Aldo3VoltageConfig {
+        address: 0x94,
+        fields: Aldo1VoltageConfig,
+    },
+    /// ALDO4 output voltage config (0.5-3.5V, 100mV/step).
+    register Aldo4VoltageConfig {
+        address: 0x95,
+        fields: Aldo1VoltageConfig,
+    },
+    /// BLDO1 output voltage config (0.5-3.5V, 100mV/step).
+    register Bldo1VoltageConfig {
+        address: 0x96,
+        fields: Aldo1VoltageConfig,
+    },
+    /// BLDO2 output voltage config (0.5-3.5V, 100mV/step).
+    register Bldo2VoltageConfig {
+        address: 0x97,
+        fields: Aldo1VoltageConfig,
+    },
+    /// CPUSLDO output voltage config (0.5-1.4V, 50mV/step).
+    register CpuSldoVoltageConfig {
+        address: 0x98,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            field voltage_setting 4:0,
+        },
+    },
+    /// DLDO1 output voltage config (0.5-3.5V, 100mV/step).
+    register Dldo1VoltageConfig {
+        address: 0x99,
+        fields: Aldo1VoltageConfig,
+    },
+    /// DLDO2 output voltage config (0.5-1.4V, 50mV/step).
+    register Dldo2VoltageConfig {
+        address: 0x9A,
+        fields: CpuSldoVoltageConfig,
+    },
+    /// High byte of Battery Voltage ADC. Also contains debug flags.
+    register BatteryVoltageAdcHigh {
+        address: 0x34,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// ADC debug channel enable bits [1:0].
+            field ch_dbg_en 7:6,
+            /// Battery voltage ADC data bits [13:8].
+            field value 5:0 RO,
+        },
+    },
+    /// Low byte of Battery Voltage ADC.
+    register BatteryVoltageAdcLow {
+        address: 0x35,
+        access: RO,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Battery voltage ADC data bits [7:0].
+            field value 7:0,
+        },
+    },
+    /// High byte of TS Pin ADC. Also contains ADC and debug flags.
+    register TsPinAdcHigh {
+        address: 0x36,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// ADC low frequency sample mode when PWROFF and battery only (64s).
+            field adc_low_freq_enable 7,
+            /// ADC debug channel enable bit [2].
+            field ch_dbg_en_h 6,
+            /// TS pin ADC data bits [13:8].
+            field value 5:0 RO,
+        },
+    },
+    /// Low byte of TS Pin ADC.
+    register TsPinAdcLow {
+        address: 0x37,
+        access: RO,
+        fields: BatteryVoltageAdcLow,
+    },
+    /// High byte of VBUS Voltage ADC.
+    register VbusVoltageAdcHigh {
+        address: 0x38,
+        access: RO,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// VBUS voltage ADC data bits [13:8].
+            field value 5:0,
+        },
+    },
+    /// Low byte of VBUS Voltage ADC.
+    register VbusVoltageAdcLow {
+        address: 0x39,
+        access: RO,
+        fields: BatteryVoltageAdcLow,
+    },
+    /// High byte of VSYS Voltage ADC.
+    register VsysVoltageAdcHigh {
+        address: 0x3A,
+        access: RO,
+        fields: VbusVoltageAdcHigh,
+    },
+    /// Low byte of VSYS Voltage ADC.
+    register VsysVoltageAdcLow {
+        address: 0x3B,
+        access: RO,
+        fields: BatteryVoltageAdcLow,
+    },
+    /// High byte of Internal Temperature ADC.
+    register InternalTemperatureAdcHigh {
+        address: 0x3C,
+        access: RO,
+        fields: VbusVoltageAdcHigh,
+    },
+    /// Low byte of Internal Temperature ADC.
+    register InternalTemperatureAdcLow {
+        address: 0x3D,
+        access: RO,
+        fields: BatteryVoltageAdcLow,
+    },
+    /// High byte of General Purpose ADC.
+    register GpadcAdcHigh {
+        address: 0x3E,
+        access: RO,
+        fields: VbusVoltageAdcHigh,
+    },
+    /// Low byte of General Purpose ADC.
+    register GpadcAdcLow {
+        address: 0x3F,
+        access: RO,
+        fields: BatteryVoltageAdcLow,
+    },
+    /// Interrupt enable register 0 for battery and fuel gauge related interrupts.
+    register IrqEnable0 {
+        address: 0x40,
+        reset: 0xff,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// SOC drop to Warning Level2 IRQ enable.
+            field soc_warning_level2_irq_enable 7,
+            /// SOC drop to Warning Level1 IRQ enable.
+            field soc_warning_level1_irq_enable 6,
+            /// Gauge watchdog timeout IRQ enable.
+            field gauge_watchdog_timeout_irq_enable 5,
+            /// Gauge new SOC IRQ enable.
+            field new_soc_irq_enable 4,
+            /// Battery over temperature in charge mode IRQ enable.
+            field battery_charge_over_temp_irq_enable 3,
+            /// Battery under temperature in charge mode IRQ enable.
+            field battery_charge_under_temp_irq_enable 2,
+            /// Battery over temperature in work mode IRQ enable.
+            field battery_work_over_temp_irq_enable 1,
+            /// Battery under temperature in work mode IRQ enable.
+            field battery_work_under_temp_irq_enable 0,
+        },
+    },
+    /// Interrupt enable register 1 for VBUS, battery insertion/removal, and power key events.
+    register IrqEnable1 {
+        address: 0x41,
+        reset: 0xf8,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// VBUS insert IRQ enable.
+            field vbus_insert_irq_enable 7,
+            /// VBUS remove IRQ enable.
+            field vbus_remove_irq_enable 6,
+            /// Battery insert IRQ enable.
+            field battery_insert_irq_enable 5,
+            /// Battery remove IRQ enable.
+            field battery_remove_irq_enable 4,
+            /// Power key short press IRQ enable.
+            field power_key_short_press_irq_enable 3,
+            /// Power key long press IRQ enable.
+            field power_key_long_press_irq_enable 2,
+            /// Power key negative edge IRQ enable.
+            field power_key_negative_edge_irq_enable 1,
+            /// Power key positive edge IRQ enable.
+            field power_key_positive_edge_irq_enable 0,
+        },
+    },
+    /// Interrupt enable register 2 for various system events.
+    register IrqEnable2 {
+        address: 0x42,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Watchdog Expire IRQ enable (true: enable, false: disable).
+            field wdexp_irq_en 7,
+            /// LDO Over Current IRQ enable (true: enable, false: disable).
+            field ldooc_irq_en 6,
+            /// BATFET Over Current Protection IRQ enable (true: enable, false: disable).
+            field bocp_irq_en 5,
+            /// Battery charge done IRQ enable (true: enable, false: disable).
+            field chgdn_irq_en 4,
+            /// Charger start IRQ enable (true: enable, false: disable).
+            field chgst_irq_en 3,
+            /// DIE Over Temperature level1 IRQ enable (true: enable, false: disable).
+            field dot11_irq_en 2,
+            /// Charger Safety Timer1/2 expire IRQ enable (true: enable, false: disable).
+            field chgte_irq_en 1,
+            /// Battery Over Voltage Protection IRQ enable (true: enable, false: disable).
+            field bovp_irq_en 0,
+        },
+    },
+    /// Interrupt status register 0. Write 1 to corresponding bit to clear the interrupt.
+    /// Corresponds to interrupt enable register 0 (REG40H).
+    register IrqStatus0 {
+        address: 0x48,
+        reset: 0x0,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// SOC drop to Warning Level2 IRQ status. Write 1 to clear.
+            field soc_warning_level2_irq 7,
+            /// SOC drop to Warning Level1 IRQ status. Write 1 to clear.
+            field soc_warning_level1_irq 6,
+            /// Gauge watchdog timeout IRQ status. Write 1 to clear.
+            field gauge_watchdog_timeout_irq 5,
+            /// Gauge new SOC IRQ status. Write 1 to clear.
+            field new_soc_irq 4,
+            /// Battery over temperature in charge mode IRQ status. Write 1 to clear.
+            field battery_charge_over_temp_irq 3,
+            /// Battery under temperature in charge mode IRQ status. Write 1 to clear.
+            field battery_charge_under_temp_irq 2,
+            /// Battery over temperature in work mode IRQ status. Write 1 to clear.
+            field battery_work_over_temp_irq 1,
+            /// Battery under temperature in work mode IRQ status. Write 1 to clear.
+            field battery_work_under_temp_irq 0,
+        },
+    },
+    /// Interrupt status register 1. Corresponds to irq_en1.
+    register IrqStatus1 {
+        address: 0x49,
+        reset: 0x0,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// VBUS Insert IRQ. Write 1 to clear.
+            field vinsert_irq 7,
+            /// VBUS Remove IRQ. Write 1 to clear.
+            field vremove_irq 6,
+            /// Battery Insert IRQ. Write 1 to clear.
+            field binsert_irq 5,
+            /// Battery Remove IRQ. Write 1 to clear.
+            field bremove_irq 4,
+            /// POWERON Short PRESS IRQ. Write 1 to clear.
+            field pons_irq 3,
+            /// POWERON Long PRESS IRQ. Write 1 to clear.
+            field ponl_irq 2,
+            /// POWERON Negative Edge IRQ. Write 1 to clear.
+            field ponn_irq 1,
+            /// POWERON Positive Edge IRQ. Write 1 to clear.
+            field ponp_irq 0,
+        },
+    },
+    /// Interrupt status register 2. Corresponds to irq_en2.
+    register IrqStatus2 {
+        address: 0x4A,
+        reset: 0x0,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Watchdog Expire IRQ. Write 1 to clear.
+            field wdexp_irq 7,
+            /// LDO Over Current IRQ. Write 1 to clear.
+            field ldooc_irq 6,
+            /// BATFET Over Current Protection IRQ. Write 1 to clear.
+            field bocp_irq 5,
+            /// Battery charge done IRQ. Write 1 to clear.
+            field chgdn_irq 4,
+            /// Battery charge start IRQ. Write 1 to clear.
+            field chgst_irq 3,
+            /// DIE Over Temperature level1 IRQ. Write 1 to clear.
+            field dot11_irq 2,
+            /// Charger Safety Timer1/2 expire IRQ. Write 1 to clear.
+            field chgte_irq 1,
+            /// Battery Over Voltage Protection IRQ. Write 1 to clear.
+            field bovp_irq 0,
+        },
+    },
+    /// TS pin and GPADC mode control.
+    register TsPinControl {
+        address: 0x50,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// TS PIN function select (0: battery temp sensor, 1: external input).
+            field ts_func 4,
+            /// TS current source on/off enable.
+            field ts_src_en 3:2 -> _ as enum TsSourceEnable {
+                /// Off
+                Off: 0,
+                /// On when TS channel of ADC is enabled
+                OnWhenAdcEnabled: 1,
+                /// On only when TS channel is working
+                OnWhenTsWorking: 2,
+                /// Always on
+                AlwaysOn: 3,
+            },
+            /// current source to TS pin config.
+            field ts_curr 1:0 -> _ as enum TsCurrent {
+                /// 20uA
+                Ua20: 0,
+                /// 40uA
+                Ua40: 1,
+                /// 50uA
+                Ua50: 2,
+                /// 60uA
+                Ua60: 3,
+            },
+        },
+    },
+    /// Hysteresis for TS from low go to normal. Thys = N * 16mV.
+    register TsHysteresisL2H {
+        address: 0x52,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            field hysteresis 7:0,
+        },
+    },
+    /// Hysteresis for TS from high go to normal. Thys = N * 4mV.
+    register TsHysteresisH2L {
+        address: 0x53,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            field hysteresis 7:0,
+        },
+    },
+    /// VLTF in voltage of charge config. VLTF = N * 32mV.
+    register VltfChg {
+        address: 0x54,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            field threshold 7:0,
+        },
+    },
+    /// VHTF in voltage of charge config. VHTF = N * 2mV.
+    register VhtfChg {
+        address: 0x55,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            field threshold 7:0,
+        },
+    },
+    /// VLTF in voltage of work config. VLTF = N * 32mV.
+    register VltfWork {
+        address: 0x56,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            field threshold 7:0,
+        },
+    },
+    /// VHTF in voltage of work config. VHTF = N * 2mV.
+    register VhtfWork {
+        address: 0x57,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            field threshold 7:0,
+        },
+    },
+    /// JEITA standard Enable control.
+    register JeitaEnable {
+        address: 0x58,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// JEITA Standard Enable (true: enable, false: disable).
+            field jeita_en 0,
+        },
+    },
+    /// JEITA standard charge voltage and current fall settings.
+    register JeitaConfig {
+        address: 0x59,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Current fall of Warm in JEITA Standard (0: 100%, 1: 50%).
+            field jwarm_ifall 6,
+            /// Current fall of Cool in JEITA Standard (0: 100%, 1: 50%).
+            field jcool_ifall 4,
+            /// Voltage fall of Warm in JEITA Standard.
+            field jwarm_vfall 3:2,
+            /// Voltage fall of Cool in JEITA Standard.
+            field jcool_vfall 1:0,
+        },
+    },
+    /// Cool Temperature (T2) in voltage of charge config. VHTF = N*16 mV.
+    register JeitaCoolTemp {
+        address: 0x5A,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            field threshold 7:0,
+        },
+    },
+    /// Warm Temperature (T3) in voltage of charge config. VHTF = N*8 mV.
+    register JeitaWarmTemp {
+        address: 0x5B,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            field threshold 7:0,
+        },
+    },
+    /// TS config data high byte. When `ts_ch_en = 0`, the MCU can provide a
+    /// configured TS voltage via ts_cfg_data[13:0]. This register holds bits [13:8].
+    register TsCfgDataHigh {
+        address: 0x5C,
+        reset: 0x02,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// ts_cfg_data[13:8]
+            field value 5:0,
+        },
+    },
+    /// TS config data low byte. When `ts_ch_en = 0`, the MCU can provide a
+    /// configured TS voltage via ts_cfg_data[13:0]. This register holds bits [7:0].
+    register TsCfgDataLow {
+        address: 0x5D,
+        reset: 0x58,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// ts_cfg_data[7:0]
+            field value 7:0,
+        },
+    },
+    /// Battery State of Charge (SOC) percentage from fuel gauge.
+    /// Range: 0-100% in 1% increments.
+    register BatteryPercentage {
+        address: 0xA4,
+        access: RO,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Battery percentage (0-100%).
+            field percentage 7:0,
+        },
+    },
+    /// Controls resetting the fuel gauge.
+    register ResetFuelGauge {
+        address: 0x17,
+        reset: 0x0,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Reset the gauge (true: reset).
+            field reset_gauge 3 WO,
+            /// Reset the gauge besides registers (true: reset).
+            field reset_logic_gauge 2,
+        },
+    },
+    /// Thermal regulation threshold setting.
+    register ThermalRegulationThreshold {
+        address: 0x65,
+        fields: fieldset ThermalRegulationThresholdFieldSet {
+            size-bytes: 1,
+
+            /// Thermal regulation threshold.
+            field tregu_thld 1:0 -> _ as enum ThermalRegulationThreshold {
+                /// 60degC
+                Deg60: 0,
+                /// 80degC
+                Deg80: 1,
+                /// 100degC
+                Deg100: 2,
+                /// 120degC
+                Deg120: 3,
+            },
+        },
+    },
+    /// Charger timeout setting and control.
+    register ChargerTimeout {
+        address: 0x67,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// safety timer 1/2 setting during DPM or thermal regulation (0: normal, 1: slowed).
+            field tmr_dt_en 7,
+            /// charge done safe timer enable (true: enable, false: disable).
+            field chg_tmr2_en 6,
+            /// charge done safety timer config.
+            field chg_tmr2_cfg 5:4 -> _ as enum ChargeDoneSafetyTimer {
+                /// 5 hours
+                H5: 0,
+                /// 8 hours
+                H8: 1,
+                /// 12 hours
+                H12: 2,
+                /// 20 hours
+                H20: 3,
+            },
+            /// pre-charge safe timer enable (true: enable, false: disable).
+            field chg_tmr1_en 2,
+            /// pre-charge safe timer config.
+            field chg_tmr1_cfg 1:0 -> _ as enum PrechargeSafetyTimer {
+                /// 40 mins
+                Min40: 0,
+                /// 50 mins
+                Min50: 1,
+                /// 60 mins
+                Min60: 2,
+                /// 70 mins
+                Min70: 3,
+            },
+        },
+    },
+    /// Battery detection control.
+    register BatteryDetectionControl {
+        address: 0x68,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// battery detection enable (true: enable, false: disable).
+            field bat_det_en 0,
+        },
+    },
+    /// CHGLED setting and control.
+    register ChgLedControl {
+        address: 0x69,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// CHGLED pin output control when chgled_func is Manual. LED is on when driven low.
+            field chgled_out_ctrl 5:4 -> _ as enum ChgledOutputControl {
+                /// Hi-Z (LED off)
+                HighImpedance: 0,
+                /// Low/Hi-Z 25%/75% duty 1Hz
+                Blink1Hz: 1,
+                /// Low/Hi-Z 25%/75% duty 4Hz
+                Blink4Hz: 2,
+                /// Drive low (LED fully on)
+                DriveLow: 3,
+            },
+            /// CHGLED pin display function config. LED is active-low (on when CHGLED is low).
+            field chgled_func 2:1 -> _ as enum ChgledFunction {
+                /// Type A: off=idle/full, blink1Hz=alarm, blink4Hz=overvoltage, on=charging
+                TypeA: 0,
+                /// Type B: off=battery only, blink1Hz=charging, blink4Hz=alarm, on=VBUS no-bat/full
+                TypeB: 1,
+                /// Manual control via chgled_out_ctrl
+                Manual: 2,
+                /// Reserved
+                Reserved: 3,
+            },
+            /// CHGLED pin enable (true: enable, false: disable).
+            field chgled_en 0,
+        },
+    },
+    /// Button battery charge termination voltage setting.
+    register ButtonBatteryCharge {
+        address: 0x6A,
+        fields: fieldset _ {
+            size-bytes: 1,
+
+            /// Button Battery charge termination voltage (2.6V + N*0.1V).
+            field btn_chg_cfg 2:0 -> _ as enum ButtonBatteryChargeVoltage {
+                /// 2.6V
+                V2_6: 0,
+                /// 2.7V
+                V2_7: 1,
+                /// 2.8V
+                V2_8: 2,
+                /// 2.9V
+                V2_9: 3,
+                /// 3.0V
+                V3_0: 4,
+                /// 3.1V
+                V3_1: 5,
+                /// 3.2V
+                V3_2: 6,
+                /// 3.3V
+                V3_3: 7,
+            },
+        },
+    },
+}

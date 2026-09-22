@@ -2,6 +2,7 @@ use super::{I2c, RegisterInterface, bisync, only_async, only_sync};
 use crate::adc_helpers::*;
 use crate::{AXP2101_I2C_ADDRESS, AdcChannel, AxpError, AxpInterface, AxpLowLevel, DcId, LdoId};
 use crate::{BatteryCurrentDirection, ChargeVoltageLimit, FastChargeCurrentLimit};
+use device_driver::{FieldsetMetadata, RegisterInterfaceBase};
 
 #[bisync]
 impl<I2CBus, E> RegisterInterface for AxpInterface<I2CBus>
@@ -9,13 +10,11 @@ where
     I2CBus: I2c<Error = E>,
     E: core::fmt::Debug,
 {
-    type AddressType = u8;
-    type Error = AxpError<E>;
     async fn read_register(
         &mut self,
         address: u8,
-        _size_bits: u32,
         data: &mut [u8],
+        _metadata: &FieldsetMetadata,
     ) -> Result<(), Self::Error> {
         self.i2c_bus
             .write_read(AXP2101_I2C_ADDRESS, &[address], data)
@@ -25,8 +24,8 @@ where
     async fn write_register(
         &mut self,
         address: u8,
-        _size_bits: u32,
-        data: &[u8],
+        data: &mut [u8],
+        _metadata: &FieldsetMetadata,
     ) -> Result<(), Self::Error> {
         let mut buffer = [0u8; 5];
         if (1 + data.len()) > buffer.len() {
@@ -42,7 +41,7 @@ where
 }
 
 pub struct Axp2101<
-    I2CImpl: RegisterInterface<AddressType = u8, Error = AxpError<I2CBusErr>>,
+    I2CImpl: RegisterInterfaceBase<AddressType = u8, Error = AxpError<I2CBusErr>>,
     I2CBusErr: core::fmt::Debug,
 > {
     pub ll: AxpLowLevel<I2CImpl>,
@@ -62,14 +61,17 @@ where
     }
 }
 
+/// Helper bound bundling the device-driver interface traits the high-level API
+/// relies on: the operation trait (`RegisterInterface`, aliased per bisync flavor)
+/// plus the shared base carrying the address/error types.
 pub trait CurrentAxpDriverInterface<E>:
-    RegisterInterface<AddressType = u8, Error = AxpError<E>>
+    RegisterInterface + RegisterInterfaceBase<AddressType = u8, Error = AxpError<E>>
 {
 }
 
 impl<T, E> CurrentAxpDriverInterface<E> for T
 where
-    T: RegisterInterface<AddressType = u8, Error = AxpError<E>>,
+    T: RegisterInterface + RegisterInterfaceBase<AddressType = u8, Error = AxpError<E>>,
     E: core::fmt::Debug,
 {
 }
@@ -83,10 +85,10 @@ where
 {
     #[bisync]
     pub async fn get_battery_voltage_mv(&mut self) -> Result<u16, AxpError<I2CBusErr>> {
-        let mut op_high = self.ll.battery_voltage_adc_high();
-        let high_byte = read_internal(&mut op_high).await?;
-        let mut op_low = self.ll.battery_voltage_adc_low();
-        let low_byte = read_internal(&mut op_low).await?;
+        let op_high = self.ll.battery_voltage_adc_high();
+        let high_byte = read_internal(op_high).await?;
+        let op_low = self.ll.battery_voltage_adc_low();
+        let low_byte = read_internal(op_low).await?;
 
         let adc_value = adc_14bit_combine(high_byte.value(), low_byte.value());
         Ok(battery_voltage_to_mv(adc_value))
@@ -94,10 +96,10 @@ where
 
     #[bisync]
     pub async fn get_vbus_voltage_mv(&mut self) -> Result<u16, AxpError<I2CBusErr>> {
-        let mut op_high = self.ll.vbus_voltage_adc_high();
-        let high_byte = read_internal(&mut op_high).await?;
-        let mut op_low = self.ll.vbus_voltage_adc_low();
-        let low_byte = read_internal(&mut op_low).await?;
+        let op_high = self.ll.vbus_voltage_adc_high();
+        let high_byte = read_internal(op_high).await?;
+        let op_low = self.ll.vbus_voltage_adc_low();
+        let low_byte = read_internal(op_low).await?;
 
         let adc_value = adc_14bit_combine(high_byte.value(), low_byte.value());
         Ok(vbus_voltage_to_mv(adc_value))
@@ -105,10 +107,10 @@ where
 
     #[bisync]
     pub async fn get_vsys_voltage_mv(&mut self) -> Result<u16, AxpError<I2CBusErr>> {
-        let mut op_high = self.ll.vsys_voltage_adc_high();
-        let high_byte = read_internal(&mut op_high).await?;
-        let mut op_low = self.ll.vsys_voltage_adc_low();
-        let low_byte = read_internal(&mut op_low).await?;
+        let op_high = self.ll.vsys_voltage_adc_high();
+        let high_byte = read_internal(op_high).await?;
+        let op_low = self.ll.vsys_voltage_adc_low();
+        let low_byte = read_internal(op_low).await?;
 
         let adc_value = adc_14bit_combine(high_byte.value(), low_byte.value());
         Ok(vsys_voltage_to_mv(adc_value))
@@ -116,10 +118,10 @@ where
 
     #[bisync]
     pub async fn get_ts_pin_mv(&mut self) -> Result<f32, AxpError<I2CBusErr>> {
-        let mut op_high = self.ll.ts_pin_adc_high();
-        let high_byte = read_internal(&mut op_high).await?;
-        let mut op_low = self.ll.ts_pin_adc_low();
-        let low_byte = read_internal(&mut op_low).await?;
+        let op_high = self.ll.ts_pin_adc_high();
+        let high_byte = read_internal(op_high).await?;
+        let op_low = self.ll.ts_pin_adc_low();
+        let low_byte = read_internal(op_low).await?;
 
         let adc_value = adc_14bit_combine(high_byte.value(), low_byte.value());
         Ok(ts_pin_to_mv(adc_value))
@@ -127,10 +129,10 @@ where
 
     #[bisync]
     pub async fn get_die_temperature_c(&mut self) -> Result<f32, AxpError<I2CBusErr>> {
-        let mut op_high = self.ll.internal_temperature_adc_high();
-        let high_byte = read_internal(&mut op_high).await?;
-        let mut op_low = self.ll.internal_temperature_adc_low();
-        let low_byte = read_internal(&mut op_low).await?;
+        let op_high = self.ll.internal_temperature_adc_high();
+        let high_byte = read_internal(op_high).await?;
+        let op_low = self.ll.internal_temperature_adc_low();
+        let low_byte = read_internal(op_low).await?;
 
         let adc_value = adc_14bit_combine(high_byte.value(), low_byte.value());
         Ok(die_temp_to_celsius(adc_value))
@@ -138,10 +140,10 @@ where
 
     #[bisync]
     pub async fn get_gpadc_value(&mut self) -> Result<u16, AxpError<I2CBusErr>> {
-        let mut op_high = self.ll.gpadc_adc_high();
-        let high_byte = read_internal(&mut op_high).await?;
-        let mut op_low = self.ll.gpadc_adc_low();
-        let low_byte = read_internal(&mut op_low).await?;
+        let op_high = self.ll.gpadc_adc_high();
+        let high_byte = read_internal(op_high).await?;
+        let op_low = self.ll.gpadc_adc_low();
+        let low_byte = read_internal(op_low).await?;
 
         Ok(adc_14bit_combine(high_byte.value(), low_byte.value()))
     }
@@ -152,13 +154,13 @@ where
         dc: DcId,
         enable: bool,
     ) -> Result<(), AxpError<I2CBusErr>> {
-        let mut op = self.ll.dcdc_config_0();
+        let op = self.ll.dcdc_config_0();
         match dc {
-            DcId::Dcdc1 => modify_internal(&mut op, |r| r.set_dcdc1_enable(enable)).await,
-            DcId::Dcdc2 => modify_internal(&mut op, |r| r.set_dcdc2_enable(enable)).await,
-            DcId::Dcdc3 => modify_internal(&mut op, |r| r.set_dcdc3_enable(enable)).await,
-            DcId::Dcdc4 => modify_internal(&mut op, |r| r.set_dcdc4_enable(enable)).await,
-            DcId::Dcdc5 => modify_internal(&mut op, |r| r.set_dcdc5_enable(enable)).await,
+            DcId::Dcdc1 => modify_internal(op, |r| r.set_dcdc_1_enable(enable)).await,
+            DcId::Dcdc2 => modify_internal(op, |r| r.set_dcdc_2_enable(enable)).await,
+            DcId::Dcdc3 => modify_internal(op, |r| r.set_dcdc_3_enable(enable)).await,
+            DcId::Dcdc4 => modify_internal(op, |r| r.set_dcdc_4_enable(enable)).await,
+            DcId::Dcdc5 => modify_internal(op, |r| r.set_dcdc_5_enable(enable)).await,
         }
     }
 
@@ -209,24 +211,24 @@ where
 
         match dc {
             DcId::Dcdc1 => {
-                let mut op = self.ll.dcdc_1_voltage_config();
-                modify_internal(&mut op, |r| r.set_voltage_setting(voltage_val)).await
+                let op = self.ll.dcdc_1_voltage_config();
+                modify_internal(op, |r| r.set_voltage_setting(voltage_val)).await
             }
             DcId::Dcdc2 => {
-                let mut op = self.ll.dcdc_2_voltage_config();
-                modify_internal(&mut op, |r| r.set_voltage_setting(voltage_val)).await
+                let op = self.ll.dcdc_2_voltage_config();
+                modify_internal(op, |r| r.set_voltage_setting(voltage_val)).await
             }
             DcId::Dcdc3 => {
-                let mut op = self.ll.dcdc_3_voltage_config();
-                modify_internal(&mut op, |r| r.set_voltage_setting(voltage_val)).await
+                let op = self.ll.dcdc_3_voltage_config();
+                modify_internal(op, |r| r.set_voltage_setting(voltage_val)).await
             }
             DcId::Dcdc4 => {
-                let mut op = self.ll.dcdc_4_voltage_config();
-                modify_internal(&mut op, |r| r.set_voltage_setting(voltage_val)).await
+                let op = self.ll.dcdc_4_voltage_config();
+                modify_internal(op, |r| r.set_voltage_setting(voltage_val)).await
             }
             DcId::Dcdc5 => {
-                let mut op = self.ll.dcdc_5_voltage_config();
-                modify_internal(&mut op, |r| r.set_voltage_setting(voltage_val)).await
+                let op = self.ll.dcdc_5_voltage_config();
+                modify_internal(op, |r| r.set_voltage_setting(voltage_val)).await
             }
         }
     }
@@ -239,19 +241,19 @@ where
     ) -> Result<(), AxpError<I2CBusErr>> {
         match ldo {
             LdoId::Dldo2 => {
-                let mut op = self.ll.ldo_enable_config_1();
-                modify_internal(&mut op, |r| r.set_dldo2_enable(enable)).await
+                let op = self.ll.ldo_enable_config_1();
+                modify_internal(op, |r| r.set_dldo_2_enable(enable)).await
             }
             _ => {
-                let mut op = self.ll.ldo_enable_config_0();
-                modify_internal(&mut op, |r| match ldo {
-                    LdoId::Aldo1 => r.set_aldo1_enable(enable),
-                    LdoId::Aldo2 => r.set_aldo2_enable(enable),
-                    LdoId::Aldo3 => r.set_aldo3_enable(enable),
-                    LdoId::Aldo4 => r.set_aldo4_enable(enable),
-                    LdoId::Bldo1 => r.set_bldo1_enable(enable),
-                    LdoId::Bldo2 => r.set_bldo2_enable(enable),
-                    LdoId::Dldo1 => r.set_dldo1_enable(enable),
+                let op = self.ll.ldo_enable_config_0();
+                modify_internal(op, |r| match ldo {
+                    LdoId::Aldo1 => r.set_aldo_1_enable(enable),
+                    LdoId::Aldo2 => r.set_aldo_2_enable(enable),
+                    LdoId::Aldo3 => r.set_aldo_3_enable(enable),
+                    LdoId::Aldo4 => r.set_aldo_4_enable(enable),
+                    LdoId::Bldo1 => r.set_bldo_1_enable(enable),
+                    LdoId::Bldo2 => r.set_bldo_2_enable(enable),
+                    LdoId::Dldo1 => r.set_dldo_1_enable(enable),
                     LdoId::Cpusldo => r.set_cpusldo_enable(enable),
                     LdoId::Dldo2 => unreachable!(),
                 })
@@ -272,72 +274,72 @@ where
                     return Err(AxpError::InvalidVoltage(voltage_mv));
                 }
                 let val = ((voltage_mv - 500) / 100) as u8;
-                let mut op = self.ll.aldo_1_voltage_config();
-                modify_internal(&mut op, |r| r.set_voltage_setting(val)).await
+                let op = self.ll.aldo_1_voltage_config();
+                modify_internal(op, |r| r.set_voltage_setting(val)).await
             }
             LdoId::Aldo2 => {
                 if !(500..=3500).contains(&voltage_mv) {
                     return Err(AxpError::InvalidVoltage(voltage_mv));
                 }
                 let val = ((voltage_mv - 500) / 100) as u8;
-                let mut op = self.ll.aldo_2_voltage_config();
-                modify_internal(&mut op, |r| r.set_voltage_setting(val)).await
+                let op = self.ll.aldo_2_voltage_config();
+                modify_internal(op, |r| r.set_voltage_setting(val)).await
             }
             LdoId::Aldo3 => {
                 if !(500..=3500).contains(&voltage_mv) {
                     return Err(AxpError::InvalidVoltage(voltage_mv));
                 }
                 let val = ((voltage_mv - 500) / 100) as u8;
-                let mut op = self.ll.aldo_3_voltage_config();
-                modify_internal(&mut op, |r| r.set_voltage_setting(val)).await
+                let op = self.ll.aldo_3_voltage_config();
+                modify_internal(op, |r| r.set_voltage_setting(val)).await
             }
             LdoId::Aldo4 => {
                 if !(500..=3500).contains(&voltage_mv) {
                     return Err(AxpError::InvalidVoltage(voltage_mv));
                 }
                 let val = ((voltage_mv - 500) / 100) as u8;
-                let mut op = self.ll.aldo_4_voltage_config();
-                modify_internal(&mut op, |r| r.set_voltage_setting(val)).await
+                let op = self.ll.aldo_4_voltage_config();
+                modify_internal(op, |r| r.set_voltage_setting(val)).await
             }
             LdoId::Bldo1 => {
                 if !(500..=3500).contains(&voltage_mv) {
                     return Err(AxpError::InvalidVoltage(voltage_mv));
                 }
                 let val = ((voltage_mv - 500) / 100) as u8;
-                let mut op = self.ll.bldo_1_voltage_config();
-                modify_internal(&mut op, |r| r.set_voltage_setting(val)).await
+                let op = self.ll.bldo_1_voltage_config();
+                modify_internal(op, |r| r.set_voltage_setting(val)).await
             }
             LdoId::Bldo2 => {
                 if !(500..=3500).contains(&voltage_mv) {
                     return Err(AxpError::InvalidVoltage(voltage_mv));
                 }
                 let val = ((voltage_mv - 500) / 100) as u8;
-                let mut op = self.ll.bldo_2_voltage_config();
-                modify_internal(&mut op, |r| r.set_voltage_setting(val)).await
+                let op = self.ll.bldo_2_voltage_config();
+                modify_internal(op, |r| r.set_voltage_setting(val)).await
             }
             LdoId::Dldo1 => {
                 if !(500..=3500).contains(&voltage_mv) {
                     return Err(AxpError::InvalidVoltage(voltage_mv));
                 }
                 let val = ((voltage_mv - 500) / 100) as u8;
-                let mut op = self.ll.dldo_1_voltage_config();
-                modify_internal(&mut op, |r| r.set_voltage_setting(val)).await
+                let op = self.ll.dldo_1_voltage_config();
+                modify_internal(op, |r| r.set_voltage_setting(val)).await
             }
             LdoId::Dldo2 => {
                 if !(500..=1400).contains(&voltage_mv) {
                     return Err(AxpError::InvalidVoltage(voltage_mv));
                 }
                 let val = ((voltage_mv - 500) / 50) as u8;
-                let mut op = self.ll.dldo_2_voltage_config();
-                modify_internal(&mut op, |r| r.set_voltage_setting(val)).await
+                let op = self.ll.dldo_2_voltage_config();
+                modify_internal(op, |r| r.set_voltage_setting(val)).await
             }
             LdoId::Cpusldo => {
                 if !(500..=1400).contains(&voltage_mv) {
                     return Err(AxpError::InvalidVoltage(voltage_mv));
                 }
                 let val = ((voltage_mv - 500) / 50) as u8;
-                let mut op = self.ll.cpu_sldo_voltage_config();
-                modify_internal(&mut op, |r| r.set_voltage_setting(val)).await
+                let op = self.ll.cpu_sldo_voltage_config();
+                modify_internal(op, |r| r.set_voltage_setting(val)).await
             }
         }
     }
@@ -347,8 +349,8 @@ where
         &mut self,
         enable: bool,
     ) -> Result<(), AxpError<I2CBusErr>> {
-        let mut op = self.ll.module_enable();
-        modify_internal(&mut op, |r| r.set_battery_charge_enable(enable)).await
+        let op = self.ll.module_enable();
+        modify_internal(op, |r| r.set_battery_charge_enable(enable)).await
     }
 
     #[bisync]
@@ -356,8 +358,8 @@ where
         &mut self,
         current_setting: FastChargeCurrentLimit,
     ) -> Result<(), AxpError<I2CBusErr>> {
-        let mut op = self.ll.fast_charge_current_config();
-        modify_internal(&mut op, |r| r.set_fast_charge_current(current_setting)).await
+        let op = self.ll.fast_charge_current_config();
+        modify_internal(op, |r| r.set_fast_charge_current(current_setting)).await
     }
 
     #[bisync]
@@ -365,18 +367,18 @@ where
         &mut self,
         voltage_setting: ChargeVoltageLimit,
     ) -> Result<(), AxpError<I2CBusErr>> {
-        let mut op = self.ll.charge_voltage_config();
-        modify_internal(&mut op, |r| r.set_charge_voltage(voltage_setting)).await
+        let op = self.ll.charge_voltage_config();
+        modify_internal(op, |r| r.set_charge_voltage(voltage_setting)).await
     }
 
     #[bisync]
     pub async fn get_chip_id(&mut self) -> Result<u8, AxpError<I2CBusErr>> {
-        let mut op = self.ll.chip_id();
-        let chip_data = read_internal(&mut op).await?;
+        let op = self.ll.chip_id();
+        let chip_data = read_internal(op).await?;
         // Compose chip ID from high bits [7:6], version [5:4], and low bits [3:0]
-        let chip_id = ((chip_data.chip_id_high() as u8) << 6)
+        let chip_id = (chip_data.chip_id_high() << 6)
             | ((chip_data.chip_version() as u8) << 4)
-            | (chip_data.chip_id_low() as u8);
+            | chip_data.chip_id_low();
         Ok(chip_id)
     }
 
@@ -384,8 +386,8 @@ where
     pub async fn get_power_status(
         &mut self,
     ) -> Result<(bool, bool, bool, bool), AxpError<I2CBusErr>> {
-        let mut op = self.ll.power_status();
-        let status = read_internal(&mut op).await?;
+        let op = self.ll.power_status();
+        let status = read_internal(op).await?;
 
         Ok((
             status.vbus_good(),
@@ -398,12 +400,12 @@ where
     #[bisync]
     pub async fn get_battery_status(&mut self) -> Result<(bool, bool), AxpError<I2CBusErr>> {
         // Get battery present from power status
-        let mut op1 = self.ll.power_status();
-        let power_status = read_internal(&mut op1).await?;
+        let op1 = self.ll.power_status();
+        let power_status = read_internal(op1).await?;
 
         // Get charging status from system status
-        let mut op2 = self.ll.system_status();
-        let system_status = read_internal(&mut op2).await?;
+        let op2 = self.ll.system_status();
+        let system_status = read_internal(op2).await?;
 
         Ok((
             power_status.battery_present(),
@@ -422,8 +424,8 @@ where
         channel: AdcChannel,
         enable: bool,
     ) -> Result<(), AxpError<I2CBusErr>> {
-        let mut op = self.ll.adc_channel_enable_0();
-        modify_internal(&mut op, |r| match channel {
+        let op = self.ll.adc_channel_enable_0();
+        modify_internal(op, |r| match channel {
             AdcChannel::BatteryVoltage => r.set_vbat_ch_en(enable),
             AdcChannel::TsPin => r.set_ts_ch_en(enable),
             AdcChannel::VbusVoltage => r.set_vbus_ch_en(enable),
@@ -437,8 +439,8 @@ where
     /// Enable all ADC channels at once
     #[bisync]
     pub async fn enable_all_adc_channels(&mut self) -> Result<(), AxpError<I2CBusErr>> {
-        let mut op = self.ll.adc_channel_enable_0();
-        modify_internal(&mut op, |r| {
+        let op = self.ll.adc_channel_enable_0();
+        modify_internal(op, |r| {
             r.set_vbat_ch_en(true);
             r.set_ts_ch_en(true);
             r.set_vbus_ch_en(true);
@@ -456,8 +458,8 @@ where
         &mut self,
         channel_mask: u8,
     ) -> Result<(), AxpError<I2CBusErr>> {
-        let mut op = self.ll.adc_channel_enable_0();
-        modify_internal(&mut op, |r| {
+        let op = self.ll.adc_channel_enable_0();
+        modify_internal(op, |r| {
             r.set_gpadc_ch_en(channel_mask & (1 << 5) != 0);
             r.set_tdie_ch_en(channel_mask & (1 << 4) != 0);
             r.set_vsys_ch_en(channel_mask & (1 << 3) != 0);
@@ -475,10 +477,10 @@ where
         irq1_mask: u8,
     ) -> Result<(), AxpError<I2CBusErr>> {
         // Enable IRQ0 register interrupts (battery/gauge related)
-        let mut op0 = self.ll.irq_enable_0();
-        write_internal(&mut op0, |r| {
-            r.set_soc_warning_level2_irq_enable(irq0_mask & 0x80 != 0);
-            r.set_soc_warning_level1_irq_enable(irq0_mask & 0x40 != 0);
+        let op0 = self.ll.irq_enable_0();
+        write_internal(op0, |r| {
+            r.set_soc_warning_level_2_irq_enable(irq0_mask & 0x80 != 0);
+            r.set_soc_warning_level_1_irq_enable(irq0_mask & 0x40 != 0);
             r.set_gauge_watchdog_timeout_irq_enable(irq0_mask & 0x20 != 0);
             r.set_new_soc_irq_enable(irq0_mask & 0x10 != 0);
             r.set_battery_charge_over_temp_irq_enable(irq0_mask & 0x08 != 0);
@@ -489,8 +491,8 @@ where
         .await?;
 
         // Enable IRQ1 register interrupts (VBUS/power key related)
-        let mut op1 = self.ll.irq_enable_1();
-        write_internal(&mut op1, |r| {
+        let op1 = self.ll.irq_enable_1();
+        write_internal(op1, |r| {
             r.set_vbus_insert_irq_enable(irq1_mask & 0x80 != 0);
             r.set_vbus_remove_irq_enable(irq1_mask & 0x40 != 0);
             r.set_battery_insert_irq_enable(irq1_mask & 0x20 != 0);
@@ -505,14 +507,14 @@ where
 
     #[bisync]
     pub async fn enable_interrupts2(&mut self, irq2_mask: u8) -> Result<(), AxpError<I2CBusErr>> {
-        let mut op2 = self.ll.irq_enable_2();
-        write_internal(&mut op2, |r| {
+        let op2 = self.ll.irq_enable_2();
+        write_internal(op2, |r| {
             r.set_wdexp_irq_en(irq2_mask & 0x80 != 0);
             r.set_ldooc_irq_en(irq2_mask & 0x40 != 0);
             r.set_bocp_irq_en(irq2_mask & 0x20 != 0);
             r.set_chgdn_irq_en(irq2_mask & 0x10 != 0);
             r.set_chgst_irq_en(irq2_mask & 0x08 != 0);
-            r.set_dot11_irq_en(irq2_mask & 0x04 != 0);
+            r.set_dot_11_irq_en(irq2_mask & 0x04 != 0);
             r.set_chgte_irq_en(irq2_mask & 0x02 != 0);
             r.set_bovp_irq_en(irq2_mask & 0x01 != 0);
         })
@@ -522,11 +524,11 @@ where
     #[bisync]
     pub async fn get_interrupt_status(&mut self) -> Result<(u8,), AxpError<I2CBusErr>> {
         // Read IRQ status register 0
-        let mut op0 = self.ll.irq_status_0();
-        let status0 = read_internal(&mut op0).await?;
+        let op0 = self.ll.irq_status_0();
+        let status0 = read_internal(op0).await?;
 
-        let irq0 = (status0.soc_warning_level2_irq() as u8) << 7
-            | (status0.soc_warning_level1_irq() as u8) << 6
+        let irq0 = (status0.soc_warning_level_2_irq() as u8) << 7
+            | (status0.soc_warning_level_1_irq() as u8) << 6
             | (status0.gauge_watchdog_timeout_irq() as u8) << 5
             | (status0.new_soc_irq() as u8) << 4
             | (status0.battery_charge_over_temp_irq() as u8) << 3
@@ -539,15 +541,15 @@ where
 
     #[bisync]
     pub async fn get_interrupt_status2(&mut self) -> Result<(u8,), AxpError<I2CBusErr>> {
-        let mut op2 = self.ll.irq_status_2();
-        let status2 = read_internal(&mut op2).await?;
+        let op2 = self.ll.irq_status_2();
+        let status2 = read_internal(op2).await?;
 
         let irq2 = (status2.wdexp_irq() as u8) << 7
             | (status2.ldooc_irq() as u8) << 6
             | (status2.bocp_irq() as u8) << 5
             | (status2.chgdn_irq() as u8) << 4
             | (status2.chgst_irq() as u8) << 3
-            | (status2.dot11_irq() as u8) << 2
+            | (status2.dot_11_irq() as u8) << 2
             | (status2.chgte_irq() as u8) << 1
             | (status2.bovp_irq() as u8);
 
@@ -557,10 +559,10 @@ where
     #[bisync]
     pub async fn clear_interrupt_status(&mut self) -> Result<(), AxpError<I2CBusErr>> {
         // Clear all interrupt status bits by writing 1 to them
-        let mut op0 = self.ll.irq_status_0();
-        write_internal(&mut op0, |r| {
-            r.set_soc_warning_level2_irq(true);
-            r.set_soc_warning_level1_irq(true);
+        let op0 = self.ll.irq_status_0();
+        write_internal(op0, |r| {
+            r.set_soc_warning_level_2_irq(true);
+            r.set_soc_warning_level_1_irq(true);
             r.set_gauge_watchdog_timeout_irq(true);
             r.set_new_soc_irq(true);
             r.set_battery_charge_over_temp_irq(true);
@@ -573,14 +575,14 @@ where
 
     #[bisync]
     pub async fn clear_interrupt_status2(&mut self) -> Result<(), AxpError<I2CBusErr>> {
-        let mut op2 = self.ll.irq_status_2();
-        write_internal(&mut op2, |r| {
+        let op2 = self.ll.irq_status_2();
+        write_internal(op2, |r| {
             r.set_wdexp_irq(true);
             r.set_ldooc_irq(true);
             r.set_bocp_irq(true);
             r.set_chgdn_irq(true);
             r.set_chgst_irq(true);
-            r.set_dot11_irq(true);
+            r.set_dot_11_irq(true);
             r.set_chgte_irq(true);
             r.set_bovp_irq(true);
         })
@@ -594,16 +596,16 @@ where
     /// Get battery state of charge percentage (0-100%)
     #[bisync]
     pub async fn get_battery_level(&mut self) -> Result<u8, AxpError<I2CBusErr>> {
-        let mut op = self.ll.battery_percentage();
-        let data = read_internal(&mut op).await?;
+        let op = self.ll.battery_percentage();
+        let data = read_internal(op).await?;
         Ok(data.percentage())
     }
 
     /// Check if the battery is currently charging
     #[bisync]
     pub async fn is_charging(&mut self) -> Result<bool, AxpError<I2CBusErr>> {
-        let mut op = self.ll.system_status();
-        let status = read_internal(&mut op).await?;
+        let op = self.ll.system_status();
+        let status = read_internal(op).await?;
         Ok(matches!(
             status.battery_current_direction(),
             BatteryCurrentDirection::Charging
@@ -613,23 +615,23 @@ where
     /// Check if a battery is present
     #[bisync]
     pub async fn is_battery_present(&mut self) -> Result<bool, AxpError<I2CBusErr>> {
-        let mut op = self.ll.power_status();
-        let status = read_internal(&mut op).await?;
+        let op = self.ll.power_status();
+        let status = read_internal(op).await?;
         Ok(status.battery_present())
     }
 
     /// Check if VBUS power is good (USB/external power connected)
     #[bisync]
     pub async fn is_vbus_good(&mut self) -> Result<bool, AxpError<I2CBusErr>> {
-        let mut op = self.ll.power_status();
-        let status = read_internal(&mut op).await?;
+        let op = self.ll.power_status();
+        let status = read_internal(op).await?;
         Ok(status.vbus_good())
     }
 
     /// Trigger a soft power off
     #[bisync]
     pub async fn power_off(&mut self) -> Result<(), AxpError<I2CBusErr>> {
-        let mut op = self.ll.common_config();
-        modify_internal(&mut op, |r| r.set_soft_power_off(true)).await
+        let op = self.ll.common_config();
+        modify_internal(op, |r| r.set_soft_power_off(true)).await
     }
 }
