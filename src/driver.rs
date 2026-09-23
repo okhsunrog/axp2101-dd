@@ -543,8 +543,8 @@ where
 
     #[bisync]
     pub async fn get_interrupt_status1(&mut self) -> Result<(u8,), AxpError<I2CBusErr>> {
-        let mut op1 = self.ll.irq_status_1();
-        let status1 = read_internal(&mut op1).await?;
+        let op1 = self.ll.irq_status_1();
+        let status1 = read_internal(op1).await?;
 
         let irq1 = (status1.vinsert_irq() as u8) << 7
             | (status1.vremove_irq() as u8) << 6
@@ -577,8 +577,8 @@ where
 
     #[bisync]
     pub async fn clear_interrupt_status1(&mut self) -> Result<(), AxpError<I2CBusErr>> {
-        let mut op1 = self.ll.irq_status_1();
-        write_internal(&mut op1, |r| {
+        let op1 = self.ll.irq_status_1();
+        write_internal(op1, |r| {
             r.set_vinsert_irq(true);
             r.set_vremove_irq(true);
             r.set_binsert_irq(true);
@@ -673,8 +673,8 @@ where
     /// Trigger a soft power off then power on. Also runs POR (Power-On-Reset) of designated registers
     #[bisync]
     pub async fn soft_restart(&mut self) -> Result<(), AxpError<I2CBusErr>> {
-        let mut op = self.ll.common_config();
-        modify_internal(&mut op, |r| r.set_soft_system_restart(true)).await
+        let op = self.ll.common_config();
+        modify_internal(op, |r| r.set_soft_system_restart(true)).await
     }
 
     /// Set automatic shutoff voltage for deep discharge protection
@@ -683,7 +683,7 @@ where
         &mut self,
         voff_voltage: VoffVoltage,
     ) -> Result<(), AxpError<I2CBusErr>> {
-        let mut op = self.ll.voff_threshold();
-        modify_internal(&mut op, |r| r.set_voff_thld(voff_voltage)).await
+        let op = self.ll.voff_threshold();
+        modify_internal(op, |r| r.set_voff_thld(voff_voltage)).await
     }
 }
