@@ -51,7 +51,7 @@ The `axp2101-dd` driver offers:
 
    ```toml
    [dependencies]
-   axp2101-dd = "0.3.0"
+   axp2101-dd = "0.3.1"
    # For blocking usage (Axp2101):
    embedded-hal = "1.0.0"
    # For async usage (Axp2101Async):
