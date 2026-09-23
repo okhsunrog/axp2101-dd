@@ -4,7 +4,7 @@
 //! This crate provides a bisync-based driver for the AXP2101 power management IC,
 //! built upon the `device-driver` crate for robust, declarative register
 //! definitions via a DDSL manifest. It supports both asynchronous (`async`)
-//! and blocking operation through a unified API, using the [`bisync`](https://docs.rs/bisync) crate
+//! and blocking operation through a unified API, using the [`bisync2`](https://docs.rs/bisync2) crate
 //! for seamless compatibility with both `embedded-hal` and `embedded-hal-async` traits.
 //!
 //! ## Features
@@ -146,7 +146,7 @@ where
 
 #[path = "."]
 mod asynchronous {
-    use bisync::asynchronous::*;
+    use bisync2::asynchronous::*;
     use device_driver::AsyncRegisterInterface as RegisterInterface;
     use embedded_hal_async::i2c::I2c;
     mod driver;
@@ -156,7 +156,7 @@ pub use asynchronous::Axp2101 as Axp2101Async;
 
 #[path = "."]
 mod blocking {
-    use bisync::synchronous::*;
+    use bisync2::synchronous::*;
     use device_driver::RegisterInterface;
     use embedded_hal::i2c::I2c;
     #[allow(clippy::duplicate_mod)]

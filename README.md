@@ -12,7 +12,7 @@ This crate provides a no_std driver for the AXP2101 power management IC, a highl
 The `axp2101-dd` driver offers:
 
 - **Declarative Configuration:** The AXP2101 register map is defined in [`device.ddsl`](device.ddsl), enabling `device-driver` to generate a type-safe, low-level register access API. This approach enhances maintainability and extensibility.
-- **Unified Async/Blocking API:** Uses the [`bisync`](https://github.com/JM4ier/bisync) crate to provide both asynchronous (`Axp2101Async`) and blocking (`Axp2101`) drivers from the same codebase, with no feature flags required.
+- **Unified Async/Blocking API:** Uses the [`bisync2`](https://github.com/de-vri-es/bisync2-rs) crate to provide both asynchronous (`Axp2101Async`) and blocking (`Axp2101`) drivers from the same codebase, with no feature flags required.
 - **High-Level and Low-Level APIs:**
   - High-level methods simplify tasks like setting DC-DC/LDO voltages, reading ADC values, managing battery charging.
   - Low-level API (via the `ll` field of the `Axp2101`/`Axp2101Async` struct) offers direct, type-safe access to all registers defined in `device.ddsl` via raw values or enums.
